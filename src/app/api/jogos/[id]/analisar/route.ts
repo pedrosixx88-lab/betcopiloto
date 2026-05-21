@@ -261,10 +261,23 @@ ${odds.corners ? `• Escanteios Over/Under ${odds.corners.line}: Over ${odds.co
 ${odds.cards ? `• Cartões Over/Under ${odds.cards.line}: Over ${odds.cards.over} | Under ${odds.cards.under}` : '• Cartões: não disponível'}
 ` : 'ODDS REAIS: não disponíveis para este jogo.'
 
+  // Pré-calcular média de gols no H2H no código — não deixar a IA calcular
+  const h2hGoalTotals: number[] = []
+  for (const f of h2hFinished) {
+    const hg = f.score?.fulltime?.home ?? f.goals?.home
+    const ag = f.score?.fulltime?.away ?? f.goals?.away
+    if (typeof hg === 'number' && typeof ag === 'number') h2hGoalTotals.push(hg + ag)
+  }
+  const avgH2HGoals = h2hGoalTotals.length
+    ? Math.round((h2hGoalTotals.reduce((a, b) => a + b, 0) / h2hGoalTotals.length) * 10) / 10
+    : null
+  const totalH2HGoals = h2hGoalTotals.length ? h2hGoalTotals.reduce((a, b) => a + b, 0) : null
+
   const cornersCardsText = `
-MÉDIAS H2H (${h2hFinished.length} jogos analisados):
-• Média de escanteios por jogo: ${avgCorners !== null ? avgCorners : 'sem dados'}
-• Média de cartões amarelos por jogo: ${avgCards !== null ? avgCards : 'sem dados'}
+ESTATÍSTICAS PRÉ-CALCULADAS H2H (${h2hFinished.length} jogos — NÃO recalcule, use estes números):
+• Média de gols por jogo (H2H): ${avgH2HGoals !== null ? avgH2HGoals : 'sem dados'} ${totalH2HGoals !== null ? `(total: ${totalH2HGoals} gols em ${h2hFinished.length} jogos)` : ''}
+• Média de escanteios por jogo (H2H): ${avgCorners !== null ? avgCorners : 'sem dados'}
+• Média de cartões amarelos por jogo (H2H): ${avgCards !== null ? avgCards : 'sem dados'}
 `
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -321,11 +334,13 @@ Mercado Ambas Marcam — opções: ${bttsOpts}${cornersBlock}${cardsBlock}
 ════════════════════════════════════════
 REGRAS ABSOLUTAS — VIOLÁ-LAS É INACEITÁVEL:
 
-[INTEGRIDADE DOS DADOS]
-1. NUNCA invente números, percentuais ou estatísticas. Use APENAS os números exatos fornecidos acima.
-2. Se um dado não estiver nos dados fornecidos, NÃO mencione — diga "sem dados suficientes" se necessário.
-3. Cada seção de partidas começa com "RESUMO (N jogos): XV YE ZD" — USE ESSES NÚMEROS. NUNCA recontei os resultados da lista, pois você pode errar.
-4. Todo número citado na análise deve ser rastreável nos dados acima — se não está nos dados, não diga.
+[INTEGRIDADE DOS DADOS — REGRA MAIS IMPORTANTE]
+1. NUNCA invente ou recalcule números. Todos os cálculos já foram feitos pelo sistema antes de chegar até você.
+2. V/E/D de cada time: use o "RESUMO (N jogos): XV YE ZD" exato. NUNCA recontei a lista de resultados.
+3. Gols, escanteios e cartões: use as médias da seção "ESTATÍSTICAS PRÉ-CALCULADAS H2H". NUNCA some ou divida por conta própria.
+4. Estatísticas da temporada: use os números exatos da seção "ESTATÍSTICAS NA TEMPORADA". Não arredonde diferente.
+5. Se um dado não está nas seções acima, NÃO o mencione — diga "sem dados disponíveis" se necessário.
+6. Qualquer número na análise deve ser copiado diretamente dos dados fornecidos, nunca calculado por você.
 
 [CONTEXTO DO CAMPEONATO]
 5. A análise deve levar em conta o campeonato específico: fase (grupos, mata-mata), rodada, o que está em jogo para cada time (classificação, eliminação, etc).
