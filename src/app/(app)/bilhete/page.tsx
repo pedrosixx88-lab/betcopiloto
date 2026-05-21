@@ -33,21 +33,22 @@ interface TicketSelection {
   market: string
   selection: string
   reasoning: string
+  odd?: string | null
 }
 
 interface TicketResult {
   selections: TicketSelection[]
   stake_suggested: number
-  potential_return: number
-  estimated_odd: number
   confidence: string
   alerts: string[]
 }
 
 const MARKET_LABELS: Record<string, string> = {
   match_winner: '1X2',
-  over_under: 'Mais/Menos',
+  over_under: 'Mais/Menos Gols',
   both_teams_score: 'Ambas marcam',
+  corners: 'Escanteios',
+  cards: 'Cartões',
   handicap: 'Handicap',
   correct_score: 'Placar exato',
   other: 'Outro',
@@ -274,7 +275,12 @@ export default function BilhetePage() {
                     <span className="text-xs bg-secondary px-2 py-0.5 rounded-md shrink-0">
                       {MARKET_LABELS[s.market] ?? s.market}
                     </span>
-                    <span className="text-sm font-semibold">{s.selection}</span>
+                    <span className="text-sm font-semibold flex-1">{s.selection}</span>
+                    {s.odd && (
+                      <span className="text-xs font-bold text-primary bg-brand-muted border border-primary/20 px-1.5 py-0.5 rounded shrink-0">
+                        {s.odd}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground">{s.reasoning}</p>
                 </div>

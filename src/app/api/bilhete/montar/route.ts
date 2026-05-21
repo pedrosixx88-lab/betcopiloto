@@ -62,8 +62,11 @@ export async function POST(request: NextRequest) {
     .join('\n') || 'Sem histórico suficiente.'
 
   const gamesText = analyses.map(a => {
-    const summary = a.summary as { tip?: string; confidence?: string; markets?: Array<{ market: string; selection: string; reasoning: string; confidence: string }> }
-    const markets = summary?.markets?.map(m => `  - ${m.market}: ${m.selection} (${m.confidence}) — ${m.reasoning}`).join('\n') ?? ''
+    const summary = a.summary as { tip?: string; confidence?: string; markets?: Array<{ market: string; selection: string; reasoning: string; confidence: string; odd?: string | null }> }
+    const markets = summary?.markets?.map(m => {
+      const oddInfo = m.odd ? ` [odd real: ${m.odd}]` : ''
+      return `  - ${m.market}: ${m.selection} (${m.confidence})${oddInfo} — ${m.reasoning}`
+    }).join('\n') ?? ''
     return `${a.home_team} vs ${a.away_team} (${a.league}):\n  Tip principal: ${summary?.tip ?? 'N/A'}\n  Confiança: ${summary?.confidence ?? 'N/A'}\n${markets}`
   }).join('\n\n')
 
@@ -86,9 +89,10 @@ Monte um bilhete otimizado em JSON com o seguinte formato EXATO:
       "fixture_id": 123,
       "home_team": "...",
       "away_team": "...",
-      "market": "match_winner | over_under | both_teams_score",
+      "market": "match_winner | over_under | both_teams_score | corners | cards",
       "selection": "descrição da seleção",
-      "reasoning": "justificativa em 1 frase com dados reais"
+      "reasoning": "justificativa em 1 frase com dados reais",
+      "odd": "odd real do mercado se disponível, ou null"
     }
   ],
   "stake_suggested": 50.00,
@@ -98,9 +102,10 @@ Monte um bilhete otimizado em JSON com o seguinte formato EXATO:
 
 Regras:
 - Máximo 4 seleções no bilhete
-- Prefira mercados onde o apostador tem melhor win rate
+- Prefira mercados onde o apostador tem melhor win rate e onde há odds reais disponíveis
 - Se detectar mercado com win rate < 40%, adicione alerta em "alerts"
-- NÃO inclua odd estimada nem retorno potencial — o usuário vai consultar as odds na casa de apostas
+- Inclua a odd real quando disponível na análise (campo "odd real" acima)
+- NÃO invente odds — use apenas as que estão explicitamente marcadas como "odd real" nos dados
 - Sempre justifique cada seleção com dados reais`
 
   try {

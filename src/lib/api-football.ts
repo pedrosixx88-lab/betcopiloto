@@ -102,6 +102,18 @@ export async function getTeamSeasonStats(teamId: number, leagueId: number, seaso
   return data ?? null
 }
 
+// Odds reais de um fixture (14+ casas de apostas)
+export async function getFixtureOdds(fixtureId: number): Promise<any[]> {
+  const data = await apiFetch<any[]>(`/odds?fixture=${fixtureId}`)
+  return data ?? []
+}
+
+// Estatísticas detalhadas de um fixture (escanteios, cartões, posse, chutes)
+export async function getFixtureStats(fixtureId: number): Promise<any[]> {
+  const data = await apiFetch<any[]>(`/fixtures/statistics?fixture=${fixtureId}`)
+  return data ?? []
+}
+
 export async function searchFixture(homeTeam: string, awayTeam: string, date: string): Promise<Fixture | null> {
   const fixtures = await getFixturesByDate(date)
   const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()

@@ -17,6 +17,7 @@ interface Market {
   selection: string
   reasoning: string
   confidence: 'alta' | 'média' | 'baixa'
+  odd?: string | null
 }
 
 interface Summary {
@@ -46,13 +47,12 @@ interface TicketSelection {
   market: string
   selection: string
   reasoning: string
+  odd?: string | null
 }
 
 interface Ticket {
   selections: TicketSelection[]
   stake_suggested: number
-  potential_return: number
-  estimated_odd: number
   confidence: string
   alerts: string[]
 }
@@ -65,8 +65,10 @@ const CONFIDENCE_COLOR = {
 
 const MARKET_LABELS: Record<string, string> = {
   match_winner: '1X2',
-  over_under: 'Mais/Menos',
+  over_under: 'Mais/Menos Gols',
   both_teams_score: 'Ambas marcam',
+  corners: 'Escanteios',
+  cards: 'Cartões',
   handicap: 'Handicap',
   correct_score: 'Placar exato',
   other: 'Outro',
@@ -227,12 +229,19 @@ export default function JogoPage() {
                     </CardHeader>
                     <CardContent className="px-4 pb-3 space-y-3">
                       {analysis.summary.markets.map((m, i) => (
-                        <div key={i} className="space-y-1">
-                          <div className="flex items-center justify-between">
+                        <div key={i} className="space-y-1 pb-3 border-b border-border last:border-0 last:pb-0">
+                          <div className="flex items-center justify-between gap-2">
                             <span className="text-xs text-muted-foreground">{MARKET_LABELS[m.market] ?? m.market}</span>
-                            <Badge className={cn('text-[10px] border', CONFIDENCE_COLOR[m.confidence])}>
-                              {m.confidence}
-                            </Badge>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {m.odd && (
+                                <span className="text-xs font-bold text-primary bg-brand-muted border border-primary/20 px-1.5 py-0.5 rounded">
+                                  {m.odd}
+                                </span>
+                              )}
+                              <Badge className={cn('text-[10px] border', CONFIDENCE_COLOR[m.confidence])}>
+                                {m.confidence}
+                              </Badge>
+                            </div>
                           </div>
                           <p className="text-sm font-medium">{m.selection}</p>
                           <p className="text-xs text-muted-foreground">{m.reasoning}</p>
@@ -368,11 +377,16 @@ export default function JogoPage() {
                   </CardHeader>
                   <CardContent className="px-4 pb-3 space-y-3">
                     {ticket.selections.map((s, i) => (
-                      <div key={i} className="space-y-0.5">
+                      <div key={i} className="space-y-0.5 pb-3 border-b border-border last:border-0 last:pb-0">
                         <p className="text-xs text-muted-foreground">{s.home_team} vs {s.away_team}</p>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs bg-secondary px-2 py-0.5 rounded-md">{MARKET_LABELS[s.market] ?? s.market}</span>
-                          <span className="text-sm font-medium">{s.selection}</span>
+                          <span className="text-xs bg-secondary px-2 py-0.5 rounded-md shrink-0">{MARKET_LABELS[s.market] ?? s.market}</span>
+                          <span className="text-sm font-medium flex-1">{s.selection}</span>
+                          {s.odd && (
+                            <span className="text-xs font-bold text-primary bg-brand-muted border border-primary/20 px-1.5 py-0.5 rounded shrink-0">
+                              {s.odd}
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs text-muted-foreground">{s.reasoning}</p>
                       </div>
