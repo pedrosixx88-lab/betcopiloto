@@ -76,8 +76,11 @@ function extractOdds(oddsData: any[]): {
   const result = { matchWinner: null as any, overUnder: null as any, btts: null as any, corners: null as any, cards: null as any, bookmaker: '' }
   if (!oddsData?.length) return result
 
-  const bk = oddsData[0]
-  result.bookmaker = bk?.bookmaker?.name ?? 'Bookmaker'
+  // Estrutura: response[0].bookmakers[0].bets
+  const fixtureOdds = oddsData[0]
+  const bk = fixtureOdds?.bookmakers?.[0]
+  if (!bk) return result
+  result.bookmaker = bk?.name ?? 'Bookmaker'
 
   for (const bet of bk?.bets ?? []) {
     const name = (bet.name ?? '').toLowerCase()
@@ -109,21 +112,35 @@ function extractOdds(oddsData: any[]): {
       if (yes && no) result.btts = { yes, no }
     }
 
-    if (!result.corners && name.includes('corner')) {
-      const firstOver = bet.values?.find((v: any) => (v.value ?? '').toLowerCase().startsWith('over'))
-      const firstUnder = bet.values?.find((v: any) => (v.value ?? '').toLowerCase().startsWith('under'))
-      if (firstOver && firstUnder) {
-        const line = (firstOver.value ?? '').replace(/over\s*/i, '')
-        result.corners = { line, over: firstOver.odd, under: firstUnder.odd }
+    // "Corners Over Under" (sem barra) — busca Over 8.5 ou Over 9.5
+    if (!result.corners && name === 'corners over under') {
+      const over85 = bet.values?.find((v: any) => v.value === 'Over 8.5')
+      const under85 = bet.values?.find((v: any) => v.value === 'Under 8.5')
+      if (over85 && under85) {
+        result.corners = { line: '8.5', over: over85.odd, under: under85.odd }
+      } else {
+        const firstOver = bet.values?.find((v: any) => (v.value ?? '').toLowerCase().startsWith('over'))
+        const firstUnder = bet.values?.find((v: any) => (v.value ?? '').toLowerCase().startsWith('under'))
+        if (firstOver && firstUnder) {
+          const line = (firstOver.value ?? '').replace(/over\s*/i, '')
+          result.corners = { line, over: firstOver.odd, under: firstUnder.odd }
+        }
       }
     }
 
-    if (!result.cards && (name.includes('card') && !name.includes('corner'))) {
-      const firstOver = bet.values?.find((v: any) => (v.value ?? '').toLowerCase().startsWith('over'))
-      const firstUnder = bet.values?.find((v: any) => (v.value ?? '').toLowerCase().startsWith('under'))
-      if (firstOver && firstUnder) {
-        const line = (firstOver.value ?? '').replace(/over\s*/i, '')
-        result.cards = { line, over: firstOver.odd, under: firstUnder.odd }
+    // "Cards Over/Under" (com barra) — busca Over 4.5 ou Over 5.5
+    if (!result.cards && name === 'cards over/under') {
+      const over45 = bet.values?.find((v: any) => v.value === 'Over 4.5')
+      const under45 = bet.values?.find((v: any) => v.value === 'Under 4.5')
+      if (over45 && under45) {
+        result.cards = { line: '4.5', over: over45.odd, under: under45.odd }
+      } else {
+        const firstOver = bet.values?.find((v: any) => (v.value ?? '').toLowerCase().startsWith('over'))
+        const firstUnder = bet.values?.find((v: any) => (v.value ?? '').toLowerCase().startsWith('under'))
+        if (firstOver && firstUnder) {
+          const line = (firstOver.value ?? '').replace(/over\s*/i, '')
+          result.cards = { line, over: firstOver.odd, under: firstUnder.odd }
+        }
       }
     }
   }
