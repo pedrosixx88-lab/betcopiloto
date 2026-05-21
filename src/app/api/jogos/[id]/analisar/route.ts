@@ -177,13 +177,15 @@ export async function GET(
   const fixtureId = parseInt(id)
   if (isNaN(fixtureId)) return NextResponse.json({ error: 'ID inválido' }, { status: 400 })
 
+  const forceRefresh = request.nextUrl.searchParams.get('refresh') === '1'
+
   const { data: cached } = await supabase
     .from('game_analyses')
     .select('analysis, summary, home_team, away_team, league, created_at')
     .eq('fixture_id', fixtureId)
     .single<{ analysis: string; summary: any; home_team: string; away_team: string; league: string; created_at: string }>()
 
-  const cacheValid = cached && cached.summary?.tip && cached.summary.tip !== 'Indisponível'
+  const cacheValid = !forceRefresh && cached && cached.summary?.tip && cached.summary.tip !== 'Indisponível'
   if (cacheValid) {
     const { created_at: _, ...rest } = cached
     return NextResponse.json({ success: true, cached: true, ...rest })

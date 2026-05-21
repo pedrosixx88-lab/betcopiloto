@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
   ChevronLeft, Brain, MessageCircle, Send, Loader2,
-  AlertTriangle, Ticket, TrendingUp, CheckCircle2
+  AlertTriangle, Ticket, TrendingUp, CheckCircle2, RefreshCw
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -95,14 +95,15 @@ export default function JogoPage() {
   useEffect(() => { fetchAnalysis() }, [fixtureId])
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
-  async function fetchAnalysis() {
+  async function fetchAnalysis(refresh = false) {
     setLoadingAnalysis(true)
     try {
-      const res = await fetch(`/api/jogos/${fixtureId}/analisar`)
+      const url = `/api/jogos/${fixtureId}/analisar${refresh ? '?refresh=1' : ''}`
+      const res = await fetch(url)
       const json = await res.json()
       if (json.success) {
         setAnalysis(json)
-        if (!json.cached) toast.success('Análise gerada pela IA!')
+        if (!json.cached) toast.success(refresh ? 'Análise atualizada com odds frescas!' : 'Análise gerada pela IA!')
       } else {
         toast.error(json.error ?? 'Erro ao carregar análise')
       }
@@ -170,8 +171,15 @@ export default function JogoPage() {
           <h1 className="text-sm font-bold truncate">{title}</h1>
           {analysis && <p className="text-xs text-muted-foreground">{analysis.league}</p>}
         </div>
-        {analysis?.cached && (
-          <Badge className="text-xs shrink-0 bg-brand-muted text-primary border-primary/20">Cache IA</Badge>
+        {analysis && !loadingAnalysis && (
+          <button
+            onClick={() => fetchAnalysis(true)}
+            className="shrink-0 flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+            title="Atualizar análise com odds frescas"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Atualizar
+          </button>
         )}
       </div>
 
