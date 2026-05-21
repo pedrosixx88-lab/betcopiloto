@@ -2,14 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, PlusCircle, BarChart3, Trophy } from 'lucide-react'
+import { LayoutDashboard, BarChart3, Trophy, Ticket } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Início', icon: LayoutDashboard },
-  { href: '/apostas/nova', label: 'Registrar', icon: PlusCircle },
   { href: '/apostas', label: 'Apostas', icon: BarChart3 },
   { href: '/jogos', label: 'Jogos', icon: Trophy },
+  { href: '/bilhete', label: 'Bilhete', icon: Ticket },
 ]
 
 export default function BottomNav() {
