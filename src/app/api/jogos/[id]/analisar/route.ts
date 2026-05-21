@@ -255,7 +255,15 @@ MÉDIAS H2H (${h2hFinished.length} jogos analisados):
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-  const markets: Array<{ market: string; selection: string; reasoning: string; confidence: string; odd: string | null }> = []
+  // Pré-calcula as odds corretas por direção para passar ao prompt
+  const ouOver = odds.overUnder ? `Over ${odds.overUnder.line} gols (odd ${odds.overUnder.over})` : 'Over 2.5 gols'
+  const ouUnder = odds.overUnder ? `Under ${odds.overUnder.line} gols (odd ${odds.overUnder.under})` : 'Under 2.5 gols'
+  const bttsYes = odds.btts ? `Sim (odd ${odds.btts.yes})` : 'Sim'
+  const bttsNo = odds.btts ? `Não (odd ${odds.btts.no})` : 'Não'
+  const cornersOver = odds.corners ? `Over ${odds.corners.line} escanteios (odd ${odds.corners.over})` : avgCorners !== null ? `Over ${avgCorners} escanteios` : null
+  const cornersUnder = odds.corners ? `Under ${odds.corners.line} escanteios (odd ${odds.corners.under})` : null
+  const cardsOver = odds.cards ? `Over ${odds.cards.line} cartões (odd ${odds.cards.over})` : avgCards !== null ? `Over ${avgCards} cartões` : null
+  const cardsUnder = odds.cards ? `Under ${odds.cards.line} cartões (odd ${odds.cards.under})` : null
 
   const prompt = `Você é um analista esportivo especialista em apostas. Analise o jogo com os dados REAIS abaixo e retorne APENAS JSON válido.
 
@@ -285,6 +293,13 @@ ${h2hText}
 ${cornersCardsText}
 ${oddsText}
 
+⚠ REGRAS DE CONSISTÊNCIA LÓGICA — OBRIGATÓRIAS:
+1. Se recomendar "Under 2.5 gols", NÃO pode recomendar "Ambas marcam — Sim" (Under 2.5 + BTTS Sim só é possível com placar exato 1x1 — muito específico para recomendar os dois juntos)
+2. Se recomendar "Over 2.5 gols", pode recomendar "Ambas marcam — Sim" (são compatíveis)
+3. Se recomendar "Ambas marcam — Não", é compatível com Under e Over
+4. Escolha APENAS UMA direção por mercado (ex: só Over OU só Under, nunca os dois)
+5. Os mercados do bilhete devem contar uma história coerente sobre o jogo
+
 Retorne APENAS este JSON válido — sem texto fora do JSON:
 {
   "analysis": "Análise em 5 parágrafos em português: 1) Contexto e posição na competição com números reais, 2) Forma recente de cada time com resultados reais, 3) H2H e padrões históricos, 4) Análise de escanteios e cartões com as médias fornecidas, 5) Conclusão e recomendação principal.",
@@ -294,38 +309,38 @@ Retorne APENAS este JSON válido — sem texto fora do JSON:
     "markets": [
       {
         "market": "match_winner",
-        "selection": "Vitória do ${homeTeam} | Empate | Vitória do ${awayTeam}",
-        "reasoning": "justificativa com dados reais da análise",
+        "selection": "escolha UMA: 'Vitória do ${homeTeam}' OU 'Empate' OU 'Vitória do ${awayTeam}'${odds.matchWinner ? ` — odds disponíveis: Casa ${odds.matchWinner.home} | Empate ${odds.matchWinner.draw} | Fora ${odds.matchWinner.away}` : ''}",
+        "reasoning": "justificativa com dados reais",
         "confidence": "alta | média | baixa",
-        "odd": ${odds.matchWinner ? `"${odds.matchWinner.home}"` : 'null'}
+        "odd": "coloque aqui a odd da opção escolhida, ou null se não disponível"
       },
       {
         "market": "over_under",
-        "selection": "${odds.overUnder ? `Over ${odds.overUnder.line} gols` : 'Over 2.5 gols'} | ${odds.overUnder ? `Under ${odds.overUnder.line} gols` : 'Under 2.5 gols'}",
-        "reasoning": "justificativa baseada em média de gols dos últimos jogos",
+        "selection": "escolha UMA: '${ouOver}' OU '${ouUnder}'",
+        "reasoning": "justificativa baseada em média de gols — deve ser consistente com a escolha de BTTS",
         "confidence": "alta | média | baixa",
-        "odd": ${odds.overUnder ? `"${odds.overUnder.over}"` : 'null'}
+        "odd": "coloque aqui a odd da opção escolhida, ou null"
       },
       {
         "market": "both_teams_score",
-        "selection": "Sim | Não",
-        "reasoning": "justificativa baseada em dados de gols de ambos os times",
+        "selection": "escolha UMA: '${bttsYes}' OU '${bttsNo}' — ATENÇÃO: se escolheu Under 2.5 acima, escolha '${bttsNo}' aqui",
+        "reasoning": "justificativa consistente com a escolha de Over/Under",
         "confidence": "alta | média | baixa",
-        "odd": ${odds.btts ? `"${odds.btts.yes}"` : 'null'}
-      }${avgCorners !== null || odds.corners ? `,
+        "odd": "coloque aqui a odd da opção escolhida, ou null"
+      }${cornersOver ? `,
       {
         "market": "corners",
-        "selection": "${odds.corners ? `Over ${odds.corners.line} escanteios` : `Over ${avgCorners ?? 9} escanteios`}",
+        "selection": "escolha UMA: '${cornersOver}'${cornersUnder ? ` OU '${cornersUnder}'` : ''}",
         "reasoning": "baseado na média de ${avgCorners !== null ? avgCorners : 'N/A'} escanteios nos últimos H2H",
         "confidence": "média | baixa",
-        "odd": ${odds.corners ? `"${odds.corners.over}"` : 'null'}
-      }` : ''}${avgCards !== null || odds.cards ? `,
+        "odd": "coloque aqui a odd da opção escolhida, ou null"
+      }` : ''}${cardsOver ? `,
       {
         "market": "cards",
-        "selection": "${odds.cards ? `Over ${odds.cards.line} cartões` : `Over ${avgCards ?? 4} cartões`}",
-        "reasoning": "baseado na média de ${avgCards !== null ? avgCards : 'N/A'} cartões amarelos nos últimos H2H",
+        "selection": "escolha UMA: '${cardsOver}'${cardsUnder ? ` OU '${cardsUnder}'` : ''}",
+        "reasoning": "baseado na média de ${avgCards !== null ? avgCards : 'N/A'} cartões nos últimos H2H",
         "confidence": "média | baixa",
-        "odd": ${odds.cards ? `"${odds.cards.over}"` : 'null'}
+        "odd": "coloque aqui a odd da opção escolhida, ou null"
       }` : ''}
     ]
   }
