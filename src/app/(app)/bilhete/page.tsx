@@ -283,6 +283,9 @@ export default function BilhetePage() {
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">{s.reasoning}</p>
+                  {s.odd && (
+                    <p className="text-[10px] text-yellow-400/70">⚠ Odd registrada no momento da análise — verifique na Bet365</p>
+                  )}
                 </div>
               ))}
             </CardContent>

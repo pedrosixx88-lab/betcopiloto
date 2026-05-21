@@ -245,6 +245,9 @@ export default function JogoPage() {
                           </div>
                           <p className="text-sm font-medium">{m.selection}</p>
                           <p className="text-xs text-muted-foreground">{m.reasoning}</p>
+                          {m.odd && (
+                            <p className="text-[10px] text-yellow-400/70">⚠ Odd registrada no momento da análise — verifique o valor atual na Bet365</p>
+                          )}
                         </div>
                       ))}
                     </CardContent>
@@ -389,6 +392,9 @@ export default function JogoPage() {
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground">{s.reasoning}</p>
+                        {s.odd && (
+                          <p className="text-[10px] text-yellow-400/70">⚠ Odd registrada no momento da análise — verifique na Bet365</p>
+                        )}
                       </div>
                     ))}
                   </CardContent>
