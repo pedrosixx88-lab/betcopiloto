@@ -76,9 +76,10 @@ function extractOdds(oddsData: any[]): {
   const result = { matchWinner: null as any, overUnder: null as any, btts: null as any, corners: null as any, cards: null as any, bookmaker: '' }
   if (!oddsData?.length) return result
 
-  // Estrutura: response[0].bookmakers[0].bets
+  // Estrutura: response[0].bookmakers[]. Prioriza Bet365 (id=8), fallback para o primeiro disponível
   const fixtureOdds = oddsData[0]
-  const bk = fixtureOdds?.bookmakers?.[0]
+  const bookmakers = fixtureOdds?.bookmakers ?? []
+  const bk = bookmakers.find((b: any) => b.id === 8) ?? bookmakers[0]
   if (!bk) return result
   result.bookmaker = bk?.name ?? 'Bookmaker'
 
