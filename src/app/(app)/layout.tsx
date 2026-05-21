@@ -9,10 +9,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen flex flex-col">
-      <main className="flex-1 pb-20 md:pb-6">
-        {children}
-      </main>
       <BottomNav />
+      <main className="flex-1 pb-20 md:pb-8 md:pt-14">
+        <div className="max-w-5xl mx-auto w-full">
+          {children}
+        </div>
+      </main>
     </div>
   )
 }

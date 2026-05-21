@@ -1,0 +1,63 @@
+import { NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { getFixturesByDate, FEATURED_LEAGUES } from '@/lib/api-football'
+
+const FINISHED = ['FT', 'AET', 'PEN', 'ABD', 'WO', 'AWD', 'CANC']
+
+function getDateString(offset: number, tz = 'America/Sao_Paulo') {
+  const d = new Date(new Date().toLocaleString('en-US', { timeZone: tz }))
+  d.setDate(d.getDate() + offset)
+  return d.toISOString().split('T')[0]
+}
+
+function dateLabel(dateStr: string) {
+  const today = getDateString(0)
+  const tomorrow = getDateString(1)
+  if (dateStr === today) return 'Hoje'
+  if (dateStr === tomorrow) return 'Amanhã'
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('pt-BR', {
+    weekday: 'long', day: 'numeric', month: 'long',
+  })
+}
+
+export async function GET() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+
+  const featuredIds = new Set(FEATURED_LEAGUES.map(l => l.id))
+  const leagueMap = Object.fromEntries(FEATURED_LEAGUES.map(l => [l.id, l]))
+
+  const dates = [getDateString(0), getDateString(1), getDateString(2)]
+
+  // Busca as 3 datas em paralelo
+  const results = await Promise.all(dates.map(d => getFixturesByDate(d).catch(() => [])))
+
+  const days: { date: string; label: string; games: object[] }[] = []
+
+  for (let i = 0; i < dates.length; i++) {
+    const date = dates[i]
+    const fixtures = results[i]
+
+    const games = fixtures
+      .filter(f => featuredIds.has(f.league.id) && !FINISHED.includes(f.fixture.status.short))
+      .map(f => ({
+        fixture_id: f.fixture.id,
+        home_team: f.teams.home.name,
+        away_team: f.teams.away.name,
+        league: leagueMap[f.league.id]?.name ?? f.league.name,
+        country: leagueMap[f.league.id]?.country ?? f.league.country,
+        time: new Date(f.fixture.date).toLocaleTimeString('pt-BR', {
+          hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo',
+        }),
+        status: f.fixture.status.short,
+      }))
+      .sort((a, b) => a.time.localeCompare(b.time))
+
+    if (games.length > 0) {
+      days.push({ date, label: dateLabel(date), games })
+    }
+  }
+
+  return NextResponse.json({ success: true, days })
+}

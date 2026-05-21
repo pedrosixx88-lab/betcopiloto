@@ -5,7 +5,7 @@ import { z } from 'zod'
 
 const Schema = z.object({
   stake: z.number().positive(),
-  fixture_ids: z.array(z.number()).min(1).max(6),
+  fixture_ids: z.array(z.number()).min(1).max(8),
 })
 
 export async function POST(request: NextRequest) {
@@ -29,6 +29,15 @@ export async function POST(request: NextRequest) {
     .limit(50)
     .returns<Array<{ market: string; selection: string; status: string; stake: number; odd: number }>>()
 
+  // Garantir análises — gera as que ainda não existem no cache
+  await Promise.all(
+    fixture_ids.map(id =>
+      fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/jogos/${id}/analisar`, {
+        headers: { cookie: request.headers.get('cookie') ?? '' },
+      }).catch(() => null)
+    )
+  )
+
   // Buscar análises dos jogos selecionados
   const { data: analyses } = await supabase
     .from('game_analyses')
@@ -37,7 +46,7 @@ export async function POST(request: NextRequest) {
     .returns<Array<{ fixture_id: number; home_team: string; away_team: string; league: string; summary: Record<string, unknown> }>>()
 
   if (!analyses || analyses.length === 0) {
-    return NextResponse.json({ error: 'Analise os jogos antes de montar o bilhete.' }, { status: 400 })
+    return NextResponse.json({ error: 'Não foi possível analisar os jogos. Tente novamente.' }, { status: 400 })
   }
 
   // Calcular padrões do usuário por mercado
