@@ -18,16 +18,24 @@ export async function POST(
 
   if (!message) return NextResponse.json({ error: 'Mensagem vazia' }, { status: 400 })
 
-  // Buscar análise em cache
   const { data: cached } = await supabase
     .from('game_analyses')
-    .select('analysis, home_team, away_team, league')
+    .select('analysis, summary, home_team, away_team, league')
     .eq('fixture_id', parseInt(id))
-    .single<{ analysis: string; home_team: string; away_team: string; league: string }>()
+    .single<{ analysis: string; summary: any; home_team: string; away_team: string; league: string }>()
 
-  const context = cached
-    ? `Jogo: ${cached.home_team} vs ${cached.away_team} (${cached.league})\n\nAnálise prévia:\n${cached.analysis}`
-    : `Jogo ID: ${id}`
+  const gameContext = cached
+    ? `JOGO: ${cached.home_team} vs ${cached.away_team}
+COMPETIÇÃO: ${cached.league}
+
+ANÁLISE COMPLETA:
+${cached.analysis}
+
+TIP PRINCIPAL: ${cached.summary?.tip ?? 'N/A'} (confiança: ${cached.summary?.confidence ?? 'N/A'})
+
+MERCADOS ANALISADOS:
+${cached.summary?.markets?.map((m: any) => `- ${m.market}: ${m.selection}${m.odd ? ` @ ${m.odd}` : ''} — ${m.reasoning}`).join('\n') ?? 'N/A'}`
+    : `Jogo ID: ${id} — análise ainda não gerada.`
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -36,10 +44,20 @@ export async function POST(
     { role: 'user', content: message },
   ]
 
+  const system = `Você é um assistente especializado EXCLUSIVAMENTE em análise esportiva e apostas para o jogo abaixo. Suas respostas devem:
+
+1. SOMENTE abordar temas relacionados a este jogo específico, apostas esportivas, mercados, odds ou estratégias de banca
+2. Se o usuário perguntar sobre qualquer outro assunto (política, tecnologia, receitas, etc.), responda: "Só posso te ajudar com análises e apostas deste jogo."
+3. Basear-se nos dados reais da análise abaixo — não invente estatísticas
+4. Ser direto e objetivo — máximo 3 parágrafos curtos
+5. Responder sempre em português brasileiro
+
+${gameContext}`
+
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 512,
-    system: `Você é um analista esportivo especialista em apostas. Responda perguntas sobre o seguinte jogo de forma direta e objetiva em português brasileiro. Máximo 3 parágrafos curtos.\n\n${context}`,
+    system,
     messages,
   })
 
