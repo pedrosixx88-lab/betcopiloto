@@ -158,7 +158,7 @@ export default function JogoPage() {
   const title = analysis ? `${analysis.home_team} vs ${analysis.away_team}` : 'Carregando...'
 
   return (
-    <div className="min-h-screen max-w-lg mx-auto flex flex-col">
+    <div className="min-h-screen flex flex-col">
       {/* Header */}
       <div className="p-4 flex items-center gap-3 pt-6 shrink-0">
         <button onClick={() => router.back()} className="text-muted-foreground hover:text-foreground transition-colors">

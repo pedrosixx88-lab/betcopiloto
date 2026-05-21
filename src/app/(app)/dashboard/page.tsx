@@ -84,7 +84,7 @@ export default async function DashboardPage() {
     .sort((a, b) => b.total - a.total)
 
   return (
-    <div className="p-4 max-w-lg mx-auto space-y-5 pb-24">
+    <div className="p-4 space-y-5 pb-24">
       {/* Header */}
       <div className="flex items-start justify-between gap-2 pt-2">
         <div>

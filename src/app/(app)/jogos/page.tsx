@@ -43,7 +43,7 @@ export default async function JogosPage() {
   }
 
   return (
-    <div className="p-4 max-w-lg mx-auto space-y-5 pb-24">
+    <div className="p-4 space-y-5 pb-24">
       <div className="pt-2">
         <h1 className="text-xl font-bold">Jogos de hoje</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
