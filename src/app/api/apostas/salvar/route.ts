@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { searchFixture } from '@/lib/api-football'
 import { z } from 'zod'
 
 const SaveBetSchema = z.object({
@@ -31,6 +32,13 @@ export async function POST(request: NextRequest) {
 
   const bet = parsed.data
 
+  // Tenta vincular fixture_id em background — não bloqueia o save se falhar
+  let fixtureId: number | null = null
+  try {
+    const fixture = await searchFixture(bet.home_team, bet.away_team, bet.match_date)
+    fixtureId = fixture?.fixture.id ?? null
+  } catch { /* ignora — fixture_id é preenchido pelo cron depois */ }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any).from('bets').insert({
     user_id: user.id,
@@ -46,6 +54,7 @@ export async function POST(request: NextRequest) {
     bookmaker: bet.bookmaker ?? null,
     screenshot_url: bet.screenshot_url ?? null,
     notes: bet.notes ?? null,
+    fixture_id: fixtureId,
     status: 'pending',
   }).select('id').single() as { data: { id: string } | null; error: unknown }
 
