@@ -1,8 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { TrendingUp, TrendingDown, Target, DollarSign } from 'lucide-react'
+import Link from 'next/link'
+import { TrendingUp, TrendingDown, Target, DollarSign, PlusCircle, ListFilter } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { buttonVariants } from '@/components/ui/button'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -41,9 +42,19 @@ export default async function DashboardPage() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Olá, {profile?.name?.split(' ')[0] ?? 'apostador'} 👋</h1>
-        <p className="text-muted-foreground text-sm mt-1">Aqui está sua performance</p>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-bold">Olá, {profile?.name?.split(' ')[0] ?? 'apostador'} 👋</h1>
+          <p className="text-muted-foreground text-sm mt-1">Aqui está sua performance</p>
+        </div>
+        <div className="flex gap-2 shrink-0 pt-1">
+          <Link href="/apostas" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+            <ListFilter className="h-4 w-4 mr-1" /> Apostas
+          </Link>
+          <Link href="/apostas/nova" className={buttonVariants({ size: 'sm' })}>
+            <PlusCircle className="h-4 w-4 mr-1" /> Registrar
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -106,9 +117,9 @@ export default async function DashboardPage() {
             <p className="text-sm text-muted-foreground">
               Registre sua primeira aposta para ver sua performance aqui.
             </p>
-            <Badge variant="outline" className="text-primary border-primary">
-              Em breve: upload de print
-            </Badge>
+            <Link href="/apostas/nova" className={buttonVariants({ size: 'sm' })}>
+              <PlusCircle className="h-4 w-4 mr-1" /> Registrar aposta
+            </Link>
           </CardContent>
         </Card>
       )}
