@@ -275,12 +275,12 @@ MÉDIAS H2H (${h2hFinished.length} jogos analisados):
   const cornersBlock = cornerOpts ? `\nMercado Escanteios — opções: ${cornerOpts}` : ''
   const cardsBlock = cardOpts ? `\nMercado Cartões — opções: ${cardOpts}` : ''
 
-  const prompt = `Você é um analista esportivo especialista em apostas. Analise o jogo com os dados REAIS abaixo e retorne APENAS JSON válido.
+  const prompt = `Você é um analista esportivo especialista em apostas. Sua função é analisar jogos com base EXCLUSIVAMENTE nos dados fornecidos abaixo.
 
 JOGO: ${homeTeam} vs ${awayTeam}
 COMPETIÇÃO: ${league} — ${round} | DATA: ${matchDate} | TEMPORADA: ${SEASON}
 
-CLASSIFICAÇÃO:
+CLASSIFICAÇÃO ATUAL NA COMPETIÇÃO (${league}):
 ${homeTeam}: ${homeStanding}
 ${awayTeam}: ${awayStanding}
 
@@ -290,11 +290,11 @@ ${homeLastText}
 ÚLTIMAS 7 PARTIDAS — ${awayTeam}:
 ${awayLastText}
 
-ESTATÍSTICAS TEMPORADA ${SEASON}:
+ESTATÍSTICAS NA TEMPORADA ${SEASON} (nesta competição):
 ${homeTeam}: ${homeStatsText}
 ${awayTeam}: ${awayStatsText}
 
-H2H (confrontos diretos):
+CONFRONTOS DIRETOS H2H:
 ${h2hText}
 ${cornersCardsText}
 ${oddsText}
@@ -304,29 +304,44 @@ Mercado 1X2 — opções: ${mwOpts}
 Mercado Gols Over/Under — opções: ${ouOpts}
 Mercado Ambas Marcam — opções: ${bttsOpts}${cornersBlock}${cardsBlock}
 
-REGRAS OBRIGATÓRIAS:
-- Escolha APENAS UMA opção por mercado
-- Under 2.5 gols + Ambas marcam Sim = PROIBIDO (contradição lógica)
-- Over 2.5 gols é compatível com Ambas marcam Sim
-- A odd que você colocar no campo odd deve ser o valor numérico da opção escolhida (ex: 2.35), não texto
-- Se não há odd disponível, use null (sem aspas)
-- Todos os mercados devem contar uma história coerente
+════════════════════════════════════════
+REGRAS ABSOLUTAS — VIOLÁ-LAS É INACEITÁVEL:
+
+[INTEGRIDADE DOS DADOS]
+1. NUNCA invente números, percentuais ou estatísticas. Use APENAS os números exatos fornecidos acima.
+2. Se um dado não estiver nos dados fornecidos, NÃO mencione — diga "sem dados suficientes" se necessário.
+3. NUNCA afirme algo como "o time não perdeu nos últimos X jogos" a menos que os resultados acima comprovem isso.
+4. Todo número citado na análise deve ser rastreável nos dados acima.
+
+[CONTEXTO DO CAMPEONATO]
+5. A análise deve levar em conta o campeonato específico: fase (grupos, mata-mata), rodada, o que está em jogo para cada time (classificação, eliminação, etc).
+6. A posição na tabela DESTA competição tem mais peso que forma geral — um time líder com folga joga diferente de um time que precisa vencer para não ser eliminado.
+7. H2H nesta mesma competição vale mais que H2H em competições diferentes.
+
+[CONSISTÊNCIA LÓGICA]
+8. Under 2.5 gols + Ambas marcam Sim = PROIBIDO (placar 1x1 é muito específico para recomendar os dois juntos).
+9. Escolha APENAS UMA direção por mercado (Over OU Under, Sim OU Não — nunca ambos).
+10. Todos os mercados devem contar a mesma história coerente sobre o jogo.
+
+[FORMATO]
+11. A odd no JSON deve ser um número (ex: 2.35), não string. Se não disponível, use null.
+════════════════════════════════════════
 
 Retorne APENAS o JSON abaixo, sem nenhum texto fora dele:
 {
-  "analysis": "5 parágrafos em português: 1) contexto/tabela com números reais, 2) forma recente com resultados reais, 3) H2H e padrões, 4) escanteios e cartões com médias, 5) conclusão",
+  "analysis": "5 parágrafos em português citando APENAS dados fornecidos acima: 1) contexto do campeonato e posição na tabela com números exatos, 2) forma recente de cada time com resultados reais listados, 3) H2H com resultados reais e o que indicam, 4) escanteios e cartões com as médias fornecidas, 5) conclusão coerente com tudo acima",
   "summary": {
-    "tip": "tip principal ex: Vitória do ${homeTeam} ou Under 2.5 gols",
-    "confidence": "alta",
+    "tip": "tip principal baseada nos dados — ex: Vitória do ${homeTeam} ou Under 2.5 gols",
+    "confidence": "alta ou média ou baixa",
     "markets": [
-      { "market": "match_winner", "selection": "Vitória do X ou Empate ou Vitória do Y", "reasoning": "justificativa com dados", "confidence": "alta", "odd": 1.85 },
-      { "market": "over_under", "selection": "Over X.X gols ou Under X.X gols", "reasoning": "justificativa", "confidence": "média", "odd": 2.35 },
-      { "market": "both_teams_score", "selection": "Sim ou Não", "reasoning": "justificativa consistente com over/under", "confidence": "média", "odd": 1.50 }
+      { "market": "match_winner", "selection": "Vitória do X ou Empate ou Vitória do Y", "reasoning": "cite o dado exato que embasa — ex: lidera com 10pts, 3V 1E 0D", "confidence": "alta", "odd": 1.85 },
+      { "market": "over_under", "selection": "Over X.X gols ou Under X.X gols", "reasoning": "cite médias de gols reais dos dados", "confidence": "média", "odd": 2.35 },
+      { "market": "both_teams_score", "selection": "Sim ou Não", "reasoning": "consistente com over/under escolhido acima", "confidence": "média", "odd": 1.50 }
     ]
   }
 }
 
-IMPORTANTE: se tiver dados de escanteios ou cartões, adicione esses mercados no array markets seguindo o mesmo formato. A odd deve ser um número, não uma string.`
+Se houver dados de escanteios ou cartões, adicione esses mercados no array. A odd deve ser número, não string.`
 
   let analysis = ''
   let summary: Record<string, unknown> = {}
