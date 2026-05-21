@@ -1,26 +1,29 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import {
   Ticket, Loader2, AlertTriangle, TrendingUp,
-  CheckCircle2, ChevronRight, Trophy, X
+  CheckCircle2, Trophy, X, Clock, Calendar
 } from 'lucide-react'
-import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
-interface Fixture {
+interface Game {
   fixture_id: number
   home_team: string
   away_team: string
   league: string
-  summary: {
-    tip: string
-    confidence: 'alta' | 'média' | 'baixa'
-  }
+  country: string
+  time: string
+  status: string
+}
+
+interface Day {
+  date: string
+  label: string
+  games: Game[]
 }
 
 interface TicketSelection {
@@ -32,7 +35,7 @@ interface TicketSelection {
   reasoning: string
 }
 
-interface Ticket {
+interface TicketResult {
   selections: TicketSelection[]
   stake_suggested: number
   potential_return: number
@@ -50,29 +53,30 @@ const MARKET_LABELS: Record<string, string> = {
   other: 'Outro',
 }
 
-const CONFIDENCE_COLOR = {
-  alta: 'text-primary border-primary/30 bg-brand-muted',
-  média: 'text-yellow-400 border-yellow-400/30 bg-yellow-400/10',
-  baixa: 'text-muted-foreground border-border bg-muted/30',
-}
-
 export default function BilhetePage() {
-  const [analysed, setAnalysed] = useState<Fixture[]>([])
+  const [days, setDays] = useState<Day[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [stake, setStake] = useState('50')
-  const [ticket, setTicket] = useState<Ticket | null>(null)
+  const [ticket, setTicket] = useState<TicketResult | null>(null)
   const [building, setBuilding] = useState(false)
+  const ticketRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { fetchAnalysed() }, [])
+  useEffect(() => { fetchGames() }, [])
 
-  async function fetchAnalysed() {
+  useEffect(() => {
+    if (ticket && ticketRef.current) {
+      ticketRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [ticket])
+
+  async function fetchGames() {
     try {
-      const res = await fetch('/api/jogos/analisados')
+      const res = await fetch('/api/jogos/hoje')
       const json = await res.json()
-      if (json.success) setAnalysed(json.games)
+      if (json.success) setDays(json.days)
     } catch {
-      toast.error('Erro ao carregar jogos analisados')
+      toast.error('Erro ao carregar jogos')
     } finally {
       setLoading(false)
     }
@@ -82,8 +86,8 @@ export default function BilhetePage() {
     setSelected(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
-      else if (next.size < 6) next.add(id)
-      else toast.warning('Máximo 6 jogos por bilhete')
+      else if (next.size < 8) next.add(id)
+      else toast.warning('Máximo 8 jogos por bilhete')
       return next
     })
     setTicket(null)
@@ -96,6 +100,9 @@ export default function BilhetePage() {
 
     setBuilding(true)
     try {
+      await Promise.all(
+        Array.from(selected).map(id => fetch(`/api/jogos/${id}/analisar`))
+      )
       const res = await fetch('/api/bilhete/montar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -111,124 +118,134 @@ export default function BilhetePage() {
     }
   }
 
+  const totalGames = days.reduce((acc, d) => acc + d.games.length, 0)
+
   return (
-    <div className="p-4 max-w-lg mx-auto space-y-5 pb-24">
+    <div className="p-4 space-y-5 pb-24">
       {/* Header */}
       <div className="pt-2">
         <h1 className="text-xl font-bold">Montador de bilhete</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">IA monta o bilhete com base no seu histórico</p>
-      </div>
-
-      {/* Jogos analisados */}
-      <div className="space-y-2">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-          Selecione os jogos
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Selecione os jogos dos próximos dias e a IA monta para você
         </p>
-
-        {loading && (
-          <div className="flex items-center justify-center py-8 gap-2">
-            <Loader2 className="h-5 w-5 animate-spin text-primary" />
-            <span className="text-sm text-muted-foreground">Carregando jogos...</span>
-          </div>
-        )}
-
-        {!loading && analysed.length === 0 && (
-          <Card className="border-dashed">
-            <CardContent className="py-8 text-center space-y-3">
-              <Trophy className="h-8 w-8 text-muted-foreground mx-auto" />
-              <p className="text-sm font-medium">Nenhum jogo analisado ainda</p>
-              <p className="text-xs text-muted-foreground">
-                Acesse a aba Jogos, abra um jogo e a análise é gerada automaticamente.
-              </p>
-              <Link href="/jogos" className="inline-flex items-center gap-1 text-xs text-primary font-medium">
-                Ver jogos do dia <ChevronRight className="h-3 w-3" />
-              </Link>
-            </CardContent>
-          </Card>
-        )}
-
-        {analysed.map(g => {
-          const isSelected = selected.has(g.fixture_id)
-          const conf = g.summary?.confidence as keyof typeof CONFIDENCE_COLOR | undefined
-          return (
-            <button
-              key={g.fixture_id}
-              onClick={() => toggleGame(g.fixture_id)}
-              className={cn(
-                'w-full text-left bg-card rounded-xl border p-4 transition-all',
-                isSelected ? 'border-primary bg-brand-muted' : 'border-border hover:border-primary/30'
-              )}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">
-                    {g.home_team} <span className="text-muted-foreground font-normal">vs</span> {g.away_team}
-                  </p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-muted-foreground">{g.league}</span>
-                    {g.summary?.tip && (
-                      <span className="text-xs text-primary truncate">→ {g.summary.tip}</span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {conf && (
-                    <Badge className={cn('text-[10px] border', CONFIDENCE_COLOR[conf])}>
-                      {conf}
-                    </Badge>
-                  )}
-                  <div className={cn(
-                    'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all',
-                    isSelected ? 'border-primary bg-primary' : 'border-border'
-                  )}>
-                    {isSelected && <CheckCircle2 className="h-3 w-3 text-primary-foreground" />}
-                  </div>
-                </div>
-              </div>
-            </button>
-          )
-        })}
       </div>
 
-      {/* Configuração */}
-      {analysed.length > 0 && (
-        <Card>
-          <CardContent className="py-4 px-4 space-y-4">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Jogos selecionados</span>
-              <span className="font-semibold">{selected.size} / 6</span>
-            </div>
+      {loading && (
+        <div className="flex items-center justify-center py-12 gap-2">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          <span className="text-sm text-muted-foreground">Carregando jogos...</span>
+        </div>
+      )}
 
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Valor disponível (R$)</label>
-              <input
-                type="number"
-                min="1"
-                value={stake}
-                onChange={e => { setStake(e.target.value); setTicket(null) }}
-                placeholder="50.00"
-                className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary/50"
-              />
-            </div>
-
-            <Button
-              className="w-full gap-2"
-              onClick={buildTicket}
-              disabled={building || selected.size === 0}
-            >
-              {building
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Montando bilhete...</>
-                : <><Ticket className="h-4 w-4" /> Montar bilhete com IA</>
-              }
-            </Button>
+      {!loading && totalGames === 0 && (
+        <Card className="border-dashed">
+          <CardContent className="py-10 text-center space-y-2">
+            <Trophy className="h-8 w-8 text-muted-foreground mx-auto" />
+            <p className="text-sm font-medium">Nenhum jogo disponível</p>
+            <p className="text-xs text-muted-foreground">Sem jogos nos próximos dias.</p>
           </CardContent>
         </Card>
       )}
 
-      {/* Resultado */}
+      {/* Painel flutuante de seleção */}
+      {selected.size > 0 && !ticket && (
+        <Card className="border-primary/30 bg-brand-muted sticky top-16 z-10">
+          <CardContent className="py-3 px-4 flex items-center gap-3">
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-primary">{selected.size} jogo{selected.size > 1 ? 's' : ''} selecionado{selected.size > 1 ? 's' : ''}</p>
+              <p className="text-xs text-muted-foreground">Máximo 8 jogos</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="1"
+                value={stake}
+                onChange={e => setStake(e.target.value)}
+                placeholder="R$ 50"
+                className="w-24 bg-background border border-border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-primary/50"
+              />
+              <Button size="sm" onClick={buildTicket} disabled={building} className="gap-1.5">
+                {building
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Ticket className="h-3.5 w-3.5" />
+                }
+                {building ? 'Montando...' : 'Montar'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Jogos por dia */}
+      {days.map(day => {
+        // Agrupa jogos do dia por liga
+        const byLeague: Record<string, Game[]> = {}
+        for (const g of day.games) {
+          const key = `${g.country} — ${g.league}`
+          if (!byLeague[key]) byLeague[key] = []
+          byLeague[key].push(g)
+        }
+
+        return (
+          <div key={day.date} className="space-y-3">
+            {/* Cabeçalho do dia */}
+            <div className="flex items-center gap-2 pt-1">
+              <Calendar className="h-4 w-4 text-primary" />
+              <h2 className="text-base font-bold capitalize">{day.label}</h2>
+              <span className="text-xs text-muted-foreground">({day.games.length} jogos)</span>
+            </div>
+
+            {/* Ligas do dia */}
+            {Object.entries(byLeague).map(([leagueKey, leagueGames]) => (
+              <div key={leagueKey} className="space-y-1.5">
+                <div className="flex items-center gap-1.5 px-1">
+                  <Trophy className="h-3 w-3 text-muted-foreground" />
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{leagueKey}</p>
+                </div>
+
+                {leagueGames.map(g => {
+                  const isSelected = selected.has(g.fixture_id)
+                  const isLive = ['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE'].includes(g.status)
+                  return (
+                    <button
+                      key={g.fixture_id}
+                      onClick={() => toggleGame(g.fixture_id)}
+                      className={cn(
+                        'w-full text-left rounded-xl border p-3 transition-all',
+                        isSelected ? 'border-primary bg-brand-muted' : 'bg-card border-border hover:border-primary/30'
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {g.home_team} <span className="text-muted-foreground font-normal">vs</span> {g.away_team}
+                          </p>
+                          <div className="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground">
+                            {isLive
+                              ? <span className="text-green-400 font-semibold animate-pulse">● Ao vivo</span>
+                              : <><Clock className="h-3 w-3" /><span>{g.time}</span></>
+                            }
+                          </div>
+                        </div>
+                        <div className={cn(
+                          'w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all',
+                          isSelected ? 'border-primary bg-primary' : 'border-border'
+                        )}>
+                          {isSelected && <CheckCircle2 className="h-3 w-3 text-primary-foreground" />}
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            ))}
+          </div>
+        )
+      })}
+
+      {/* Resultado do bilhete */}
       {ticket && (
-        <div className="space-y-3">
-          {/* Alertas */}
+        <div ref={ticketRef} className="space-y-3 pt-2">
           {ticket.alerts?.length > 0 && (
             <Card className="border-yellow-400/20 bg-yellow-400/5">
               <CardContent className="py-3 px-4 space-y-1.5">
@@ -242,7 +259,6 @@ export default function BilhetePage() {
             </Card>
           )}
 
-          {/* Seleções */}
           <Card>
             <CardHeader className="pb-2 pt-3 px-4">
               <CardTitle className="text-sm flex items-center gap-2">
@@ -266,7 +282,6 @@ export default function BilhetePage() {
             </CardContent>
           </Card>
 
-          {/* Resumo financeiro */}
           <Card className="border-primary/20 bg-brand-muted">
             <CardContent className="py-3 px-4 space-y-2">
               <div className="flex justify-between text-sm">
@@ -288,7 +303,6 @@ export default function BilhetePage() {
             </CardContent>
           </Card>
 
-          {/* Resetar */}
           <button
             onClick={() => { setTicket(null); setSelected(new Set()) }}
             className="w-full flex items-center justify-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors py-2"

@@ -34,18 +34,33 @@ export interface TeamForm {
 
 export interface H2HFixture extends Fixture {}
 
-// IDs das principais ligas brasileiras e europeias
+// IDs das principais ligas — foco no apostador brasileiro
 export const FEATURED_LEAGUES = [
-  { id: 71, name: 'Brasileirão Série A', country: 'Brazil' },
-  { id: 72, name: 'Brasileirão Série B', country: 'Brazil' },
-  { id: 73, name: 'Copa do Brasil', country: 'Brazil' },
-  { id: 39, name: 'Premier League', country: 'England' },
-  { id: 140, name: 'La Liga', country: 'Spain' },
-  { id: 135, name: 'Serie A', country: 'Italy' },
-  { id: 78, name: 'Bundesliga', country: 'Germany' },
-  { id: 61, name: 'Ligue 1', country: 'France' },
-  { id: 2, name: 'Champions League', country: 'Europe' },
-  { id: 3, name: 'Europa League', country: 'Europe' },
+  // Brasil
+  { id: 71, name: 'Brasileirão Série A', country: 'Brasil' },
+  { id: 72, name: 'Brasileirão Série B', country: 'Brasil' },
+  { id: 73, name: 'Copa do Brasil', country: 'Brasil' },
+  { id: 75, name: 'Brasileirão Série C', country: 'Brasil' },
+  { id: 76, name: 'Brasileirão Série D', country: 'Brasil' },
+  // América do Sul
+  { id: 13, name: 'Libertadores', country: 'América do Sul' },
+  { id: 11, name: 'Sul-Americana', country: 'América do Sul' },
+  { id: 130, name: 'Recopa Sudamericana', country: 'América do Sul' },
+  // Argentina
+  { id: 128, name: 'Liga Profesional', country: 'Argentina' },
+  // Europa — elite
+  { id: 2, name: 'Champions League', country: 'Europa' },
+  { id: 3, name: 'Europa League', country: 'Europa' },
+  { id: 848, name: 'Conference League', country: 'Europa' },
+  { id: 39, name: 'Premier League', country: 'Inglaterra' },
+  { id: 140, name: 'La Liga', country: 'Espanha' },
+  { id: 135, name: 'Serie A', country: 'Itália' },
+  { id: 78, name: 'Bundesliga', country: 'Alemanha' },
+  { id: 61, name: 'Ligue 1', country: 'França' },
+  { id: 94, name: 'Primeira Liga', country: 'Portugal' },
+  // Copas nacionais relevantes
+  { id: 40, name: 'FA Cup', country: 'Inglaterra' },
+  { id: 137, name: 'Copa del Rey', country: 'Espanha' },
 ]
 
 export async function getFixturesByDate(date: string): Promise<Fixture[]> {
@@ -68,6 +83,23 @@ export async function getTeamStats(teamId: number, leagueId: number, season: num
 
 export async function getH2H(homeId: number, awayId: number): Promise<H2HFixture[]> {
   return apiFetch<H2HFixture[]>(`/fixtures/headtohead?h2h=${homeId}-${awayId}&last=5`)
+}
+
+// Últimas N partidas de um time (todas as competições)
+export async function getLastMatches(teamId: number, last = 5): Promise<Fixture[]> {
+  return apiFetch<Fixture[]>(`/fixtures?team=${teamId}&last=${last}&timezone=America/Sao_Paulo`)
+}
+
+// Classificação de liga/grupo — retorna array de standings
+export async function getStandings(leagueId: number, season: number): Promise<any[]> {
+  const data = await apiFetch<any[]>(`/standings?league=${leagueId}&season=${season}`)
+  return data ?? []
+}
+
+// Estatísticas do time na liga/temporada
+export async function getTeamSeasonStats(teamId: number, leagueId: number, season: number): Promise<any> {
+  const data = await apiFetch<any>(`/teams/statistics?team=${teamId}&league=${leagueId}&season=${season}`)
+  return data ?? null
 }
 
 export async function searchFixture(homeTeam: string, awayTeam: string, date: string): Promise<Fixture | null> {
