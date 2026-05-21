@@ -380,25 +380,20 @@ export default function JogoPage() {
                   </CardContent>
                 </Card>
 
-                {/* Resumo financeiro */}
+                {/* Resumo */}
                 <Card className="border-primary/20 bg-brand-muted">
                   <CardContent className="py-3 px-4 space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Stake sugerido</span>
                       <span className="font-semibold">R$ {ticket.stake_suggested?.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Odd total estimada</span>
-                      <span className="font-semibold">{ticket.estimated_odd?.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm border-t border-primary/20 pt-2">
-                      <span className="text-muted-foreground">Retorno potencial</span>
-                      <span className="font-bold text-primary">R$ {ticket.potential_return?.toFixed(2)}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 pt-1">
+                    <div className="flex items-center gap-1.5 border-t border-primary/20 pt-2">
                       <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
                       <span className="text-xs text-primary">Confiança {ticket.confidence}</span>
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                      Consulte as odds reais na sua casa de apostas antes de apostar.
+                    </p>
                   </CardContent>
                 </Card>
               </>

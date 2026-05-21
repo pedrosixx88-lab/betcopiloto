@@ -88,12 +88,10 @@ Monte um bilhete otimizado em JSON com o seguinte formato EXATO:
       "away_team": "...",
       "market": "match_winner | over_under | both_teams_score",
       "selection": "descrição da seleção",
-      "reasoning": "justificativa em 1 frase"
+      "reasoning": "justificativa em 1 frase com dados reais"
     }
   ],
   "stake_suggested": 50.00,
-  "potential_return": 185.00,
-  "estimated_odd": 3.70,
   "confidence": "alta | média | baixa",
   "alerts": ["alerta se detectar padrão negativo do apostador, ex: 'Você tem apenas 30% de win rate em Over/Under'"]
 }
@@ -102,8 +100,8 @@ Regras:
 - Máximo 4 seleções no bilhete
 - Prefira mercados onde o apostador tem melhor win rate
 - Se detectar mercado com win rate < 40%, adicione alerta em "alerts"
-- Sugira stake menor se o bilhete for arriscado (odd muito alta)
-- Sempre justifique cada seleção`
+- NÃO inclua odd estimada nem retorno potencial — o usuário vai consultar as odds na casa de apostas
+- Sempre justifique cada seleção com dados reais`
 
   try {
     const response = await anthropic.messages.create({
