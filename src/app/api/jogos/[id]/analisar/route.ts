@@ -393,8 +393,21 @@ Se houver dados de escanteios ou cartões, adicione esses mercados no array. A o
     summary = parsed.summary ?? {}
     if (!analysis || !(summary as any).tip) throw new Error('Campos obrigatórios vazios')
 
-    // Validação e correção de combinações ilógicas no código — não depender só do prompt
-    const markets = (summary as any).markets ?? []
+    // Validação e correção no código — não depender só do prompt
+    const markets: any[] = (summary as any).markets ?? []
+
+    // Garantir que match_winner sempre está presente
+    if (!markets.find((m: any) => m.market === 'match_winner')) {
+      markets.unshift({
+        market: 'match_winner',
+        selection: homeStanding.startsWith('1º') ? `Vitória do ${homeTeam}` : awayStanding.startsWith('1º') ? `Vitória do ${awayTeam}` : 'Empate',
+        reasoning: 'Mercado obrigatório — reinserted automaticamente pois a IA omitiu.',
+        confidence: 'baixa',
+        odd: odds.matchWinner ? parseFloat(odds.matchWinner.home) : null,
+      })
+      ;(summary as any).markets = markets
+    }
+
     const mwMarket = markets.find((m: any) => m.market === 'match_winner')
     const bttsMarket = markets.find((m: any) => m.market === 'both_teams_score')
     const ouMarket = markets.find((m: any) => m.market === 'over_under')
@@ -410,16 +423,16 @@ Se houver dados de escanteios ou cartões, adicione esses mercados no array. A o
 
     // Empate + BTTS Não = proibido (só caberia 0x0)
     if (isEmpate && bttsNao && bttsMarket) {
-      bttsMarket.selection = odds.btts ? `Sim (odd ${odds.btts.yes})` : 'Sim'
+      bttsMarket.selection = 'Sim'
       bttsMarket.odd = odds.btts ? parseFloat(odds.btts.yes) : null
-      bttsMarket.reasoning = 'Corrigido: Empate implica que ambas marcaram (ex: 1x1) — BTTS Não é incompatível com Empate exceto em 0x0.'
+      bttsMarket.reasoning = 'Corrigido automaticamente: Empate + BTTS Não só é possível em 0x0. Se há empate, ambas marcam (ex: 1x1).'
     }
 
     // Under 2.5 + BTTS Sim = proibido (só caberia 1x1)
     if (isUnder && bttsSim && bttsMarket) {
-      bttsMarket.selection = odds.btts ? `Não (odd ${odds.btts.no})` : 'Não'
+      bttsMarket.selection = 'Não'
       bttsMarket.odd = odds.btts ? parseFloat(odds.btts.no) : null
-      bttsMarket.reasoning = 'Corrigido: Under 2.5 + Ambas marcam Sim é muito restritivo (só 1x1) — alterado para Não.'
+      bttsMarket.reasoning = 'Corrigido automaticamente: Under 2.5 + Ambas marcam Sim é restritivo demais (só 1x1).'
     }
   } catch (err) {
     console.error('Erro análise IA:', err)
