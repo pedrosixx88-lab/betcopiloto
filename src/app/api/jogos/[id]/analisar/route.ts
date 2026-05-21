@@ -343,14 +343,16 @@ REGRAS ABSOLUTAS — VIOLÁ-LAS É INACEITÁVEL:
 6. Qualquer número na análise deve ser copiado diretamente dos dados fornecidos, nunca calculado por você.
 
 [CONTEXTO DO CAMPEONATO]
-5. A análise deve levar em conta o campeonato específico: fase (grupos, mata-mata), rodada, o que está em jogo para cada time (classificação, eliminação, etc).
-6. A posição na tabela DESTA competição tem mais peso que forma geral — um time líder com folga joga diferente de um time que precisa vencer para não ser eliminado.
-7. H2H nesta mesma competição vale mais que H2H em competições diferentes.
+7. A análise deve levar em conta o campeonato específico: fase (grupos, mata-mata), rodada, o que está em jogo para cada time (classificação, eliminação, etc).
+8. A posição na tabela DESTA competição tem mais peso que forma geral — um time líder com folga joga diferente de um time que precisa vencer para não ser eliminado.
+9. H2H nesta mesma competição vale mais que H2H em competições diferentes.
 
-[CONSISTÊNCIA LÓGICA]
-8. Under 2.5 gols + Ambas marcam Sim = PROIBIDO (placar 1x1 é muito específico para recomendar os dois juntos).
-9. Escolha APENAS UMA direção por mercado (Over OU Under, Sim OU Não — nunca ambos).
-10. Todos os mercados devem contar a mesma história coerente sobre o jogo.
+[CONSISTÊNCIA LÓGICA — COMBINAÇÕES PROIBIDAS]
+10. Under 2.5 gols + Ambas marcam Sim = PROIBIDO (só caberia 1x1, muito específico).
+11. Empate + Ambas marcam Não = PROIBIDO (empate com nenhum gol só existe em 0x0 — específico demais para recomendar junto). Se recomendar Empate, use Ambas marcam Sim (1x1, 2x2) ou não inclua BTTS.
+12. Vitória de um time + Ambas marcam Não é permitido (ex: 1x0).
+13. Escolha APENAS UMA direção por mercado (Over OU Under, Sim OU Não — nunca ambos).
+14. Todos os mercados devem contar a mesma história coerente sobre o jogo.
 
 [FORMATO]
 11. A odd no JSON deve ser um número (ex: 2.35), não string. Se não disponível, use null.
