@@ -22,18 +22,32 @@ function formatLastMatches(matches: any[], teamName: string): string {
   if (!matches.length) return `Sem dados de partidas recentes para ${teamName}.`
   const finished = matches.filter(f => ['FT','AET','PEN'].includes(f.fixture.status.short))
   if (!finished.length) return `Sem resultados finalizados recentes para ${teamName}.`
-  return finished.map(f => {
+
+  let wins = 0, draws = 0, losses = 0
+  const lines = finished.map(f => {
     const isHome = f.teams.home.name === teamName || f.teams.home.name.includes(teamName.split(' ')[0])
     const hg = f.score?.fulltime?.home ?? f.goals?.home ?? '?'
     const ag = f.score?.fulltime?.away ?? f.goals?.away ?? '?'
     let result = '?'
     if (typeof hg === 'number' && typeof ag === 'number') {
-      result = isHome ? (hg > ag ? 'V' : hg === ag ? 'E' : 'D') : (ag > hg ? 'V' : ag === hg ? 'E' : 'D')
+      if (isHome) {
+        if (hg > ag) { result = 'V'; wins++ }
+        else if (hg === ag) { result = 'E'; draws++ }
+        else { result = 'D'; losses++ }
+      } else {
+        if (ag > hg) { result = 'V'; wins++ }
+        else if (ag === hg) { result = 'E'; draws++ }
+        else { result = 'D'; losses++ }
+      }
     }
     const date = new Date(f.fixture.date).toLocaleDateString('pt-BR')
     const opp = isHome ? f.teams.away.name : f.teams.home.name
     return `  ${result} | ${date} vs ${opp} (${hg}x${ag}) [${f.league.name}]`
-  }).join('\n')
+  })
+
+  // Resumo pré-calculado — a IA NÃO deve recontar, apenas usar estes números
+  const summary = `RESUMO (${finished.length} jogos): ${wins}V ${draws}E ${losses}D`
+  return `${summary}\n${lines.join('\n')}`
 }
 
 function formatStandings(standings: any[], teamId: number): string {
@@ -310,8 +324,8 @@ REGRAS ABSOLUTAS — VIOLÁ-LAS É INACEITÁVEL:
 [INTEGRIDADE DOS DADOS]
 1. NUNCA invente números, percentuais ou estatísticas. Use APENAS os números exatos fornecidos acima.
 2. Se um dado não estiver nos dados fornecidos, NÃO mencione — diga "sem dados suficientes" se necessário.
-3. NUNCA afirme algo como "o time não perdeu nos últimos X jogos" a menos que os resultados acima comprovem isso.
-4. Todo número citado na análise deve ser rastreável nos dados acima.
+3. Cada seção de partidas começa com "RESUMO (N jogos): XV YE ZD" — USE ESSES NÚMEROS. NUNCA recontei os resultados da lista, pois você pode errar.
+4. Todo número citado na análise deve ser rastreável nos dados acima — se não está nos dados, não diga.
 
 [CONTEXTO DO CAMPEONATO]
 5. A análise deve levar em conta o campeonato específico: fase (grupos, mata-mata), rodada, o que está em jogo para cada time (classificação, eliminação, etc).
