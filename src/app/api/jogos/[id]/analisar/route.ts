@@ -392,6 +392,35 @@ Se houver dados de escanteios ou cartões, adicione esses mercados no array. A o
     analysis = parsed.analysis ?? ''
     summary = parsed.summary ?? {}
     if (!analysis || !(summary as any).tip) throw new Error('Campos obrigatórios vazios')
+
+    // Validação e correção de combinações ilógicas no código — não depender só do prompt
+    const markets = (summary as any).markets ?? []
+    const mwMarket = markets.find((m: any) => m.market === 'match_winner')
+    const bttsMarket = markets.find((m: any) => m.market === 'both_teams_score')
+    const ouMarket = markets.find((m: any) => m.market === 'over_under')
+
+    const mwSel = (mwMarket?.selection ?? '').toLowerCase()
+    const bttsSel = (bttsMarket?.selection ?? '').toLowerCase()
+    const ouSel = (ouMarket?.selection ?? '').toLowerCase()
+
+    const isEmpate = mwSel.includes('empate') || mwSel.includes('draw') || mwSel === 'x'
+    const bttsNao = bttsSel.includes('não') || bttsSel.includes('nao') || bttsSel.includes('no')
+    const bttsSim = bttsSel.includes('sim') || bttsSel.includes('yes')
+    const isUnder = ouSel.includes('under')
+
+    // Empate + BTTS Não = proibido (só caberia 0x0)
+    if (isEmpate && bttsNao && bttsMarket) {
+      bttsMarket.selection = odds.btts ? `Sim (odd ${odds.btts.yes})` : 'Sim'
+      bttsMarket.odd = odds.btts ? parseFloat(odds.btts.yes) : null
+      bttsMarket.reasoning = 'Corrigido: Empate implica que ambas marcaram (ex: 1x1) — BTTS Não é incompatível com Empate exceto em 0x0.'
+    }
+
+    // Under 2.5 + BTTS Sim = proibido (só caberia 1x1)
+    if (isUnder && bttsSim && bttsMarket) {
+      bttsMarket.selection = odds.btts ? `Não (odd ${odds.btts.no})` : 'Não'
+      bttsMarket.odd = odds.btts ? parseFloat(odds.btts.no) : null
+      bttsMarket.reasoning = 'Corrigido: Under 2.5 + Ambas marcam Sim é muito restritivo (só 1x1) — alterado para Não.'
+    }
   } catch (err) {
     console.error('Erro análise IA:', err)
     return NextResponse.json({ error: 'Erro ao gerar análise' }, { status: 500 })
