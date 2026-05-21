@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/atualizar-apostas",
+      "schedule": "0 * * * *"
+    }
+  ]
+}

@@ -150,7 +150,7 @@ export default function NovaApostaPage() {
   }
 
   return (
-    <div className="min-h-screen p-4 max-w-lg mx-auto space-y-6">
+    <div className="min-h-screen p-4 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3 pt-2">
         <button onClick={() => step === 'form' ? setStep('upload') : router.back()}

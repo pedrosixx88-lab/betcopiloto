@@ -67,7 +67,7 @@ export default async function ApostasPage({
   ]
 
   return (
-    <div className="p-4 max-w-lg mx-auto space-y-5">
+    <div className="p-4 space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between pt-2">
         <h1 className="text-xl font-bold">Minhas apostas</h1>
