@@ -10,16 +10,15 @@ const FREE_FEATURES = [
   'Registro ilimitado de apostas',
   'Dashboard com métricas e ROI',
   'Lista de jogos do dia',
-  '3 análises de jogos por dia',
   'Briefing diário (sem push)',
 ]
 
 const PRO_FEATURES = [
   'Tudo do plano Free',
-  'Análises ilimitadas de jogos',
+  'Análise completa de cada jogo com IA',
+  'Chat IA sobre qualquer jogo',
   'Montador de bilhete inteligente',
   'Push notification do briefing',
-  'Chat IA sobre qualquer jogo',
   'Suporte prioritário',
 ]
 

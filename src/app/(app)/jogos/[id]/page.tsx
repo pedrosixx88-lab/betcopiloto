@@ -8,8 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
   ChevronLeft, Brain, MessageCircle, Send, Loader2,
-  AlertTriangle, Ticket, TrendingUp, CheckCircle2, RefreshCw
+  AlertTriangle, Ticket, TrendingUp, CheckCircle2, RefreshCw, Crown
 } from 'lucide-react'
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { MARKET_LABELS_SHORT as MARKET_LABELS, translateSelection } from '@/lib/labels'
 
@@ -81,8 +82,15 @@ export default function JogoPage() {
   const [stake, setStake] = useState('50')
   const [ticket, setTicket] = useState<Ticket | null>(null)
   const [loadingTicket, setLoadingTicket] = useState(false)
+  const [isPro, setIsPro] = useState<boolean | null>(null)
 
-  useEffect(() => { fetchAnalysis() }, [fixtureId])
+  useEffect(() => {
+    fetch('/api/user/plano').then(r => r.json()).then(d => {
+      const pro = d.plan === 'pro'
+      setIsPro(pro)
+      if (pro) fetchAnalysis()
+    })
+  }, [fixtureId])
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
   async function fetchAnalysis(refresh = false) {
@@ -188,8 +196,26 @@ export default function JogoPage() {
       {/* Conteúdo */}
       <div className="flex-1 overflow-y-auto p-4 pb-24 space-y-4">
 
+        {/* Gate Free — aparece em qualquer aba enquanto isPro não carregou ou é false */}
+        {isPro === false && (
+          <Card className="border-primary/30 bg-brand-muted">
+            <CardContent className="py-10 px-6 text-center space-y-4">
+              <Crown className="h-10 w-10 text-primary mx-auto" />
+              <div>
+                <p className="font-semibold text-base">Funcionalidade Pro</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Análise de jogos, chat com IA e montador de bilhete são exclusivos do plano Pro.
+                </p>
+              </div>
+              <Link href="/planos" className="inline-flex items-center gap-1.5 text-sm font-medium bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:opacity-90 transition-opacity">
+                <Crown className="h-4 w-4" /> Assinar Pro — R$ 29/mês
+              </Link>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Tab: Análise */}
-        {tab === 'analise' && (
+        {isPro === true && tab === 'analise' && (
           <>
             {loadingAnalysis && (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
@@ -269,7 +295,7 @@ export default function JogoPage() {
         )}
 
         {/* Tab: Chat */}
-        {tab === 'chat' && (
+        {isPro === true && tab === 'chat' && (
           <div className="flex flex-col h-full space-y-4">
             {messages.length === 0 && (
               <div className="text-center py-8 space-y-2">
@@ -319,7 +345,7 @@ export default function JogoPage() {
         )}
 
         {/* Tab: Bilhete */}
-        {tab === 'bilhete' && (
+        {isPro === true && tab === 'bilhete' && (
           <div className="space-y-4">
             {!analysis && !loadingAnalysis && (
               <Card className="border-yellow-400/20 bg-yellow-400/5">
@@ -352,7 +378,7 @@ export default function JogoPage() {
               </CardContent>
             </Card>
 
-            {ticket && (
+            {isPro === true && ticket && (
               <>
                 {/* Alertas */}
                 {ticket.alerts?.length > 0 && (
