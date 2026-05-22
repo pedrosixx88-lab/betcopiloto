@@ -146,3 +146,43 @@ create trigger set_profiles_updated_at
 create trigger set_bets_updated_at
   before update on bets
   for each row execute procedure public.set_updated_at();
+
+-- ============================================================
+-- PUSH SUBSCRIPTIONS — Milestone 5
+-- ============================================================
+create table push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references profiles(id) on delete cascade not null,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table push_subscriptions enable row level security;
+
+create policy "Usuário gerencia próprias subscriptions"
+  on push_subscriptions for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- ============================================================
+-- DAILY BRIEFINGS — Milestone 5
+-- ============================================================
+create table daily_briefings (
+  id uuid primary key default gen_random_uuid(),
+  date date not null unique,
+  content text not null,
+  games_count integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+alter table daily_briefings enable row level security;
+
+create policy "Qualquer usuário autenticado lê briefings"
+  on daily_briefings for select
+  using (auth.role() = 'authenticated');
+
+create policy "Service role insere briefings"
+  on daily_briefings for insert
+  with check (true);
