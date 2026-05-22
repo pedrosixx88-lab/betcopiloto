@@ -3,9 +3,15 @@ import { createClient } from '@/lib/supabase/server'
 import { getFixturesByDate, FEATURED_LEAGUES } from '@/lib/api-football'
 
 function getDateBRT(offsetDays: number): string {
-  const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
-  d.setDate(d.getDate() + offsetDays)
-  return d.toISOString().split('T')[0]
+  const now = new Date()
+  // Formata direto em BRT sem converter para UTC
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now)
+  const y = parts.find(p => p.type === 'year')!.value
+  const m = parts.find(p => p.type === 'month')!.value
+  const d = parts.find(p => p.type === 'day')!.value
+  const base = new Date(`${y}-${m}-${d}T12:00:00`)
+  base.setDate(base.getDate() + offsetDays)
+  return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`
 }
 
 function dateLabel(dateStr: string): string {
@@ -26,11 +32,29 @@ export async function GET() {
   const featuredIds = new Set(FEATURED_LEAGUES.map(l => l.id))
   const leagueMap = Object.fromEntries(FEATURED_LEAGUES.map(l => [l.id, l]))
 
-  // Só hoje — encerrados somem na virada do dia
   const today = getDateBRT(0)
-  const fixtures = await getFixturesByDate(today).catch(() => [])
+  const yesterday = getDateBRT(-1)
 
-  const filtered = fixtures.filter(f => featuredIds.has(f.league.id))
+  // Busca hoje + ontem em paralelo — jogos noturnos podem estar na data anterior em UTC
+  const [todayFixtures, yesterdayFixtures] = await Promise.all([
+    getFixturesByDate(today).catch(() => []),
+    getFixturesByDate(yesterday).catch(() => []),
+  ])
+
+  // Do ontem, só incluir jogos que ainda não encerraram OU encerraram hoje (por horário BRT)
+  const nowBRT = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
+  const todayStr = getDateBRT(0)
+
+  const relevantYesterday = yesterdayFixtures.filter(f => {
+    const kickoff = new Date(f.fixture.date)
+    const kickoffBRT = new Date(kickoff.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
+    const kickoffDateBRT = `${kickoffBRT.getFullYear()}-${String(kickoffBRT.getMonth()+1).padStart(2,'0')}-${String(kickoffBRT.getDate()).padStart(2,'0')}`
+    // Só incluir se o horário BRT do kickoff for hoje
+    return kickoffDateBRT === todayStr
+  })
+
+  const allFixtures = [...relevantYesterday, ...todayFixtures]
+  const filtered = allFixtures.filter(f => featuredIds.has(f.league.id))
 
   // Buscar quais jogos têm análise em cache
   const fixtureIds = filtered.map(f => f.fixture.id)
