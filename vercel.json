@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/atualizar-apostas",
-      "schedule": "0 * * * *"
+      "schedule": "0 23 * * *"
     },
     {
       "path": "/api/cron/briefing-diario",
