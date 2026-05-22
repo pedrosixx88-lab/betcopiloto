@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getFixtureById, getH2H, getLastMatches, getStandings, getTeamSeasonStats } from '@/lib/api-football'
+import {
+  getFixtureById, getH2H, getLastMatches, getStandings,
+  getTeamSeasonStats, getFixtureOdds, getFixtureStats,
+} from '@/lib/api-football'
 
 const SEASON = 2026
 
@@ -17,20 +20,34 @@ function formatMatch(f: any): string {
 
 function formatLastMatches(matches: any[], teamName: string): string {
   if (!matches.length) return `Sem dados de partidas recentes para ${teamName}.`
-  return matches.map(f => {
+  const finished = matches.filter(f => ['FT','AET','PEN'].includes(f.fixture.status.short))
+  if (!finished.length) return `Sem resultados finalizados recentes para ${teamName}.`
+
+  let wins = 0, draws = 0, losses = 0
+  const lines = finished.map(f => {
     const isHome = f.teams.home.name === teamName || f.teams.home.name.includes(teamName.split(' ')[0])
     const hg = f.score?.fulltime?.home ?? f.goals?.home ?? '?'
     const ag = f.score?.fulltime?.away ?? f.goals?.away ?? '?'
-    const status = f.fixture.status.short
-    if (!['FT','AET','PEN'].includes(status)) return null
     let result = '?'
     if (typeof hg === 'number' && typeof ag === 'number') {
-      result = isHome ? (hg > ag ? 'V' : hg === ag ? 'E' : 'D') : (ag > hg ? 'V' : ag === hg ? 'E' : 'D')
+      if (isHome) {
+        if (hg > ag) { result = 'V'; wins++ }
+        else if (hg === ag) { result = 'E'; draws++ }
+        else { result = 'D'; losses++ }
+      } else {
+        if (ag > hg) { result = 'V'; wins++ }
+        else if (ag === hg) { result = 'E'; draws++ }
+        else { result = 'D'; losses++ }
+      }
     }
     const date = new Date(f.fixture.date).toLocaleDateString('pt-BR')
     const opp = isHome ? f.teams.away.name : f.teams.home.name
     return `  ${result} | ${date} vs ${opp} (${hg}x${ag}) [${f.league.name}]`
-  }).filter(Boolean).join('\n') || `Sem resultados finalizados recentes para ${teamName}.`
+  })
+
+  // Resumo pré-calculado — a IA NÃO deve recontar, apenas usar estes números
+  const summary = `RESUMO (${finished.length} jogos): ${wins}V ${draws}E ${losses}D`
+  return `${summary}\n${lines.join('\n')}`
 }
 
 function formatStandings(standings: any[], teamId: number): string {
@@ -62,6 +79,106 @@ function formatStats(stats: any, teamName: string): string {
   return `${played} jogos: ${wins}V ${draws}E ${loses}D | Gols: ${goalsFor} marcados (média ${avgFor}/jogo), ${goalsAgainst} sofridos (média ${avgAgainst}/jogo) | Forma recente: ${form.slice(-5)}`
 }
 
+function extractOdds(oddsData: any[]): {
+  matchWinner: { home: string; draw: string; away: string } | null
+  overUnder: { line: string; over: string; under: string } | null
+  btts: { yes: string; no: string } | null
+  corners: { line: string; over: string; under: string } | null
+  cards: { line: string; over: string; under: string } | null
+  bookmaker: string
+} {
+  const result = { matchWinner: null as any, overUnder: null as any, btts: null as any, corners: null as any, cards: null as any, bookmaker: '' }
+  if (!oddsData?.length) return result
+
+  // Estrutura: response[0].bookmakers[]. Prioriza Bet365 (id=8), fallback para o primeiro disponível
+  const fixtureOdds = oddsData[0]
+  const bookmakers = fixtureOdds?.bookmakers ?? []
+  const bk = bookmakers.find((b: any) => b.id === 8) ?? bookmakers[0]
+  if (!bk) return result
+  result.bookmaker = bk?.name ?? 'Bookmaker'
+
+  for (const bet of bk?.bets ?? []) {
+    const name = (bet.name ?? '').toLowerCase()
+
+    if (!result.matchWinner && (name.includes('match winner') || name === '3way result')) {
+      const home = bet.values?.find((v: any) => v.value === 'Home')?.odd ?? null
+      const draw = bet.values?.find((v: any) => v.value === 'Draw')?.odd ?? null
+      const away = bet.values?.find((v: any) => v.value === 'Away')?.odd ?? null
+      if (home && draw && away) result.matchWinner = { home, draw, away }
+    }
+
+    if (!result.overUnder && name.includes('goals over/under')) {
+      const over25 = bet.values?.find((v: any) => v.value === 'Over 2.5')
+      const under25 = bet.values?.find((v: any) => v.value === 'Under 2.5')
+      if (over25 && under25) result.overUnder = { line: '2.5', over: over25.odd, under: under25.odd }
+      else {
+        const firstOver = bet.values?.find((v: any) => (v.value ?? '').toLowerCase().startsWith('over'))
+        const firstUnder = bet.values?.find((v: any) => (v.value ?? '').toLowerCase().startsWith('under'))
+        if (firstOver && firstUnder) {
+          const line = (firstOver.value ?? '').replace(/over\s*/i, '')
+          result.overUnder = { line, over: firstOver.odd, under: firstUnder.odd }
+        }
+      }
+    }
+
+    if (!result.btts && (name.includes('both teams score') || name.includes('btts'))) {
+      const yes = bet.values?.find((v: any) => (v.value ?? '').toLowerCase() === 'yes')?.odd ?? null
+      const no = bet.values?.find((v: any) => (v.value ?? '').toLowerCase() === 'no')?.odd ?? null
+      if (yes && no) result.btts = { yes, no }
+    }
+
+    // "Corners Over Under" (sem barra) — busca Over 8.5 ou Over 9.5
+    if (!result.corners && name === 'corners over under') {
+      const over85 = bet.values?.find((v: any) => v.value === 'Over 8.5')
+      const under85 = bet.values?.find((v: any) => v.value === 'Under 8.5')
+      if (over85 && under85) {
+        result.corners = { line: '8.5', over: over85.odd, under: under85.odd }
+      } else {
+        const firstOver = bet.values?.find((v: any) => (v.value ?? '').toLowerCase().startsWith('over'))
+        const firstUnder = bet.values?.find((v: any) => (v.value ?? '').toLowerCase().startsWith('under'))
+        if (firstOver && firstUnder) {
+          const line = (firstOver.value ?? '').replace(/over\s*/i, '')
+          result.corners = { line, over: firstOver.odd, under: firstUnder.odd }
+        }
+      }
+    }
+
+    // "Cards Over/Under" (com barra) — busca Over 4.5 ou Over 5.5
+    if (!result.cards && name === 'cards over/under') {
+      const over45 = bet.values?.find((v: any) => v.value === 'Over 4.5')
+      const under45 = bet.values?.find((v: any) => v.value === 'Under 4.5')
+      if (over45 && under45) {
+        result.cards = { line: '4.5', over: over45.odd, under: under45.odd }
+      } else {
+        const firstOver = bet.values?.find((v: any) => (v.value ?? '').toLowerCase().startsWith('over'))
+        const firstUnder = bet.values?.find((v: any) => (v.value ?? '').toLowerCase().startsWith('under'))
+        if (firstOver && firstUnder) {
+          const line = (firstOver.value ?? '').replace(/over\s*/i, '')
+          result.cards = { line, over: firstOver.odd, under: firstUnder.odd }
+        }
+      }
+    }
+  }
+
+  return result
+}
+
+function avgStat(fixtureStats: any[][], statName: string): number | null {
+  const values: number[] = []
+  for (const stats of fixtureStats) {
+    let total = 0
+    for (const teamStat of stats) {
+      const found = teamStat.statistics?.find((s: any) =>
+        (s.type ?? '').toLowerCase().includes(statName.toLowerCase())
+      )
+      if (found?.value != null && typeof found.value === 'number') total += found.value
+    }
+    if (total > 0) values.push(total)
+  }
+  if (!values.length) return null
+  return Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -74,20 +191,20 @@ export async function GET(
   const fixtureId = parseInt(id)
   if (isNaN(fixtureId)) return NextResponse.json({ error: 'ID inválido' }, { status: 400 })
 
-  // Cache válido = existe e tip não é "Indisponível"
+  const forceRefresh = request.nextUrl.searchParams.get('refresh') === '1'
+
   const { data: cached } = await supabase
     .from('game_analyses')
     .select('analysis, summary, home_team, away_team, league, created_at')
     .eq('fixture_id', fixtureId)
     .single<{ analysis: string; summary: any; home_team: string; away_team: string; league: string; created_at: string }>()
 
-  const cacheValid = cached && cached.summary?.tip && cached.summary.tip !== 'Indisponível'
+  const cacheValid = !forceRefresh && cached && cached.summary?.tip && cached.summary.tip !== 'Indisponível'
   if (cacheValid) {
     const { created_at: _, ...rest } = cached
     return NextResponse.json({ success: true, cached: true, ...rest })
   }
 
-  // Buscar dados do jogo
   const fixture = await getFixtureById(fixtureId)
   if (!fixture) return NextResponse.json({ error: 'Jogo não encontrado' }, { status: 404 })
 
@@ -102,20 +219,26 @@ export async function GET(
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   })
 
-  // Buscar tudo em paralelo
-  const [h2h, homeLast, awayLast, standings, homeStats, awayStats] = await Promise.all([
+  const [h2h, homeLast, awayLast, standings, homeStats, awayStats, oddsData] = await Promise.all([
     getH2H(homeId, awayId).catch(() => []),
-    getLastMatches(homeId, 6).catch(() => []),
-    getLastMatches(awayId, 6).catch(() => []),
+    getLastMatches(homeId, 7).catch(() => []),
+    getLastMatches(awayId, 7).catch(() => []),
     getStandings(leagueId, SEASON).catch(() => []),
     getTeamSeasonStats(homeId, leagueId, SEASON).catch(() => null),
     getTeamSeasonStats(awayId, leagueId, SEASON).catch(() => null),
+    getFixtureOdds(fixtureId).catch(() => []),
   ])
 
-  // Formatar contexto
-  const h2hText = h2h.length
-    ? h2h.map(formatMatch).join('\n')
-    : 'Sem confrontos diretos recentes disponíveis.'
+  // Estatísticas dos últimos H2H para médias de escanteios e cartões
+  const h2hFinished = h2h.filter((f: any) => ['FT','AET','PEN'].includes(f.fixture.status.short)).slice(0, 3)
+  const h2hStats = await Promise.all(
+    h2hFinished.map((f: any) => getFixtureStats(f.fixture.id).catch(() => []))
+  )
+
+  const avgCorners = avgStat(h2hStats, 'corner')
+  const avgCards = avgStat(h2hStats, 'yellow card')
+
+  const odds = extractOdds(oddsData)
 
   const standingsFlat = standings.flatMap((s: any) =>
     Array.isArray(s?.league?.standings) ? s.league.standings.flat() : []
@@ -127,47 +250,129 @@ export async function GET(
   const awayLastText = formatLastMatches(awayLast, awayTeam)
   const homeStatsText = formatStats(homeStats, homeTeam)
   const awayStatsText = formatStats(awayStats, awayTeam)
+  const h2hText = h2h.length ? h2h.map(formatMatch).join('\n') : 'Sem confrontos diretos recentes.'
+
+  const oddsText = odds.bookmaker ? `
+ODDS REAIS (${odds.bookmaker}):
+${odds.matchWinner ? `• Match Winner: Casa ${odds.matchWinner.home} | Empate ${odds.matchWinner.draw} | Fora ${odds.matchWinner.away}` : '• Match Winner: não disponível'}
+${odds.overUnder ? `• Gols Over/Under ${odds.overUnder.line}: Over ${odds.overUnder.over} | Under ${odds.overUnder.under}` : '• Gols Over/Under: não disponível'}
+${odds.btts ? `• Ambas marcam: Sim ${odds.btts.yes} | Não ${odds.btts.no}` : '• Ambas marcam: não disponível'}
+${odds.corners ? `• Escanteios Over/Under ${odds.corners.line}: Over ${odds.corners.over} | Under ${odds.corners.under}` : '• Escanteios: não disponível'}
+${odds.cards ? `• Cartões Over/Under ${odds.cards.line}: Over ${odds.cards.over} | Under ${odds.cards.under}` : '• Cartões: não disponível'}
+` : 'ODDS REAIS: não disponíveis para este jogo.'
+
+  // Pré-calcular média de gols no H2H no código — não deixar a IA calcular
+  const h2hGoalTotals: number[] = []
+  for (const f of h2hFinished) {
+    const hg = f.score?.fulltime?.home ?? f.goals?.home
+    const ag = f.score?.fulltime?.away ?? f.goals?.away
+    if (typeof hg === 'number' && typeof ag === 'number') h2hGoalTotals.push(hg + ag)
+  }
+  const avgH2HGoals = h2hGoalTotals.length
+    ? Math.round((h2hGoalTotals.reduce((a, b) => a + b, 0) / h2hGoalTotals.length) * 10) / 10
+    : null
+  const totalH2HGoals = h2hGoalTotals.length ? h2hGoalTotals.reduce((a, b) => a + b, 0) : null
+
+  const cornersCardsText = `
+ESTATÍSTICAS PRÉ-CALCULADAS H2H (${h2hFinished.length} jogos — NÃO recalcule, use estes números):
+• Média de gols por jogo (H2H): ${avgH2HGoals !== null ? avgH2HGoals : 'sem dados'} ${totalH2HGoals !== null ? `(total: ${totalH2HGoals} gols em ${h2hFinished.length} jogos)` : ''}
+• Média de escanteios por jogo (H2H): ${avgCorners !== null ? avgCorners : 'sem dados'}
+• Média de cartões amarelos por jogo (H2H): ${avgCards !== null ? avgCards : 'sem dados'}
+`
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-  const prompt = `Você é um analista esportivo especialista em apostas. Analise o jogo com os dados REAIS abaixo e retorne APENAS JSON válido.
+  // Opções de mercado para o prompt — texto simples sem aspas aninhadas
+  const mwOpts = odds.matchWinner
+    ? `Casa: ${odds.matchWinner.home} | Empate: ${odds.matchWinner.draw} | Fora: ${odds.matchWinner.away}`
+    : 'odds não disponíveis'
+  const ouOpts = odds.overUnder
+    ? `Over ${odds.overUnder.line}: ${odds.overUnder.over} | Under ${odds.overUnder.line}: ${odds.overUnder.under}`
+    : 'Over 2.5 ou Under 2.5 (odds não disponíveis)'
+  const bttsOpts = odds.btts
+    ? `Sim: ${odds.btts.yes} | Não: ${odds.btts.no}`
+    : 'Sim ou Não (odds não disponíveis)'
+  const cornerOpts = odds.corners
+    ? `Over ${odds.corners.line}: ${odds.corners.over} | Under ${odds.corners.line}: ${odds.corners.under}`
+    : avgCorners !== null ? `média H2H é ${avgCorners} escanteios` : null
+  const cardOpts = odds.cards
+    ? `Over ${odds.cards.line}: ${odds.cards.over} | Under ${odds.cards.line}: ${odds.cards.under}`
+    : avgCards !== null ? `média H2H é ${avgCards} cartões` : null
 
-═══════════════════════════════
+  const cornersBlock = cornerOpts ? `\nMercado Escanteios — opções: ${cornerOpts}` : ''
+  const cardsBlock = cardOpts ? `\nMercado Cartões — opções: ${cardOpts}` : ''
+
+  const prompt = `Você é um analista esportivo especialista em apostas. Sua função é analisar jogos com base EXCLUSIVAMENTE nos dados fornecidos abaixo.
+
 JOGO: ${homeTeam} vs ${awayTeam}
-COMPETIÇÃO: ${league} — ${round}
-DATA: ${matchDate}
-═══════════════════════════════
+COMPETIÇÃO: ${league} — ${round} | DATA: ${matchDate} | TEMPORADA: ${SEASON}
 
-CLASSIFICAÇÃO ATUAL NA COMPETIÇÃO:
+CLASSIFICAÇÃO ATUAL NA COMPETIÇÃO (${league}):
 ${homeTeam}: ${homeStanding}
 ${awayTeam}: ${awayStanding}
 
-ÚLTIMAS PARTIDAS — ${homeTeam}:
+ÚLTIMAS 7 PARTIDAS — ${homeTeam}:
 ${homeLastText}
 
-ÚLTIMAS PARTIDAS — ${awayTeam}:
+ÚLTIMAS 7 PARTIDAS — ${awayTeam}:
 ${awayLastText}
 
-ESTATÍSTICAS NA TEMPORADA ${SEASON}:
+ESTATÍSTICAS NA TEMPORADA ${SEASON} (nesta competição):
 ${homeTeam}: ${homeStatsText}
 ${awayTeam}: ${awayStatsText}
 
-HISTÓRICO DE CONFRONTOS DIRETOS (H2H — últimos jogos):
+CONFRONTOS DIRETOS H2H:
 ${h2hText}
+${cornersCardsText}
+${oddsText}
 
-Com base NESSES DADOS REAIS, forneça análise precisa. Mencione explicitamente a posição na tabela, a forma recente e os dados H2H. Retorne exatamente este JSON sem texto fora:
+OPÇÕES DE ODDS DISPONÍVEIS (Bet365):
+Mercado 1X2 — opções: ${mwOpts}
+Mercado Gols Over/Under — opções: ${ouOpts}
+Mercado Ambas Marcam — opções: ${bttsOpts}${cornersBlock}${cardsBlock}
+
+════════════════════════════════════════
+REGRAS ABSOLUTAS — VIOLÁ-LAS É INACEITÁVEL:
+
+[INTEGRIDADE DOS DADOS — REGRA MAIS IMPORTANTE]
+1. NUNCA invente ou recalcule números. Todos os cálculos já foram feitos pelo sistema antes de chegar até você.
+2. V/E/D de cada time: use o "RESUMO (N jogos): XV YE ZD" exato. NUNCA recontei a lista de resultados.
+3. Gols, escanteios e cartões: use as médias da seção "ESTATÍSTICAS PRÉ-CALCULADAS H2H". NUNCA some ou divida por conta própria.
+4. Estatísticas da temporada: use os números exatos da seção "ESTATÍSTICAS NA TEMPORADA". Não arredonde diferente.
+5. Se um dado não está nas seções acima, NÃO o mencione — diga "sem dados disponíveis" se necessário.
+6. Qualquer número na análise deve ser copiado diretamente dos dados fornecidos, nunca calculado por você.
+
+[CONTEXTO DO CAMPEONATO]
+7. A análise deve levar em conta o campeonato específico: fase (grupos, mata-mata), rodada, o que está em jogo para cada time (classificação, eliminação, etc).
+8. A posição na tabela DESTA competição tem mais peso que forma geral — um time líder com folga joga diferente de um time que precisa vencer para não ser eliminado.
+9. H2H nesta mesma competição vale mais que H2H em competições diferentes.
+
+[CONSISTÊNCIA LÓGICA — COMBINAÇÕES PROIBIDAS]
+10. Under 2.5 gols + Ambas marcam Sim = PROIBIDO (só caberia 1x1, muito específico).
+11. Empate + Ambas marcam Não = PROIBIDO (empate com nenhum gol só existe em 0x0 — específico demais para recomendar junto). Se recomendar Empate, use Ambas marcam Sim (1x1, 2x2) ou não inclua BTTS.
+12. Vitória de um time + Ambas marcam Não é permitido (ex: 1x0).
+13. Escolha APENAS UMA direção por mercado (Over OU Under, Sim OU Não — nunca ambos).
+14. Todos os mercados devem contar a mesma história coerente sobre o jogo.
+
+[FORMATO]
+11. A odd no JSON deve ser um número (ex: 2.35), não string. Se não disponível, use null.
+════════════════════════════════════════
+
+Retorne APENAS o JSON abaixo, sem nenhum texto fora dele:
 {
-  "analysis": "Análise em 4 parágrafos em português: 1) contexto e posição na competição, 2) forma recente de cada time com números reais, 3) histórico H2H e padrões, 4) conclusão e recomendação principal.",
+  "analysis": "5 parágrafos em português citando APENAS dados fornecidos acima: 1) contexto do campeonato e posição na tabela com números exatos, 2) forma recente de cada time com resultados reais listados, 3) H2H com resultados reais e o que indicam, 4) escanteios e cartões com as médias fornecidas, 5) conclusão coerente com tudo acima",
   "summary": {
-    "tip": "Tip principal baseada nos dados (ex: 'Vitória do ${homeTeam}', 'Under 2.5 gols')",
-    "confidence": "alta | média | baixa",
+    "tip": "tip principal baseada nos dados — ex: Vitória do ${homeTeam} ou Under 2.5 gols",
+    "confidence": "alta ou média ou baixa",
     "markets": [
-      { "market": "match_winner", "selection": "...", "reasoning": "justificativa com dados reais", "confidence": "alta | média | baixa" },
-      { "market": "over_under", "selection": "Over ou Under X.X gols", "reasoning": "justificativa com dados reais", "confidence": "alta | média | baixa" },
-      { "market": "both_teams_score", "selection": "Sim ou Não", "reasoning": "justificativa com dados reais", "confidence": "alta | média | baixa" }
+      { "market": "match_winner", "selection": "Vitória do X ou Empate ou Vitória do Y", "reasoning": "cite o dado exato que embasa — ex: lidera com 10pts, 3V 1E 0D", "confidence": "alta", "odd": 1.85 },
+      { "market": "over_under", "selection": "Over X.X gols ou Under X.X gols", "reasoning": "cite médias de gols reais dos dados", "confidence": "média", "odd": 2.35 },
+      { "market": "both_teams_score", "selection": "Sim ou Não", "reasoning": "consistente com over/under escolhido acima", "confidence": "média", "odd": 1.50 }
     ]
   }
-}`
+}
+
+Se houver dados de escanteios ou cartões, adicione esses mercados no array. A odd deve ser número, não string.`
 
   let analysis = ''
   let summary: Record<string, unknown> = {}
@@ -187,12 +392,53 @@ Com base NESSES DADOS REAIS, forneça análise precisa. Mencione explicitamente 
     analysis = parsed.analysis ?? ''
     summary = parsed.summary ?? {}
     if (!analysis || !(summary as any).tip) throw new Error('Campos obrigatórios vazios')
+
+    // Validação e correção no código — não depender só do prompt
+    const markets: any[] = (summary as any).markets ?? []
+
+    // Garantir que match_winner sempre está presente
+    if (!markets.find((m: any) => m.market === 'match_winner')) {
+      markets.unshift({
+        market: 'match_winner',
+        selection: homeStanding.startsWith('1º') ? `Vitória do ${homeTeam}` : awayStanding.startsWith('1º') ? `Vitória do ${awayTeam}` : 'Empate',
+        reasoning: 'Mercado obrigatório — reinserted automaticamente pois a IA omitiu.',
+        confidence: 'baixa',
+        odd: odds.matchWinner ? parseFloat(odds.matchWinner.home) : null,
+      })
+      ;(summary as any).markets = markets
+    }
+
+    const mwMarket = markets.find((m: any) => m.market === 'match_winner')
+    const bttsMarket = markets.find((m: any) => m.market === 'both_teams_score')
+    const ouMarket = markets.find((m: any) => m.market === 'over_under')
+
+    const mwSel = (mwMarket?.selection ?? '').toLowerCase()
+    const bttsSel = (bttsMarket?.selection ?? '').toLowerCase()
+    const ouSel = (ouMarket?.selection ?? '').toLowerCase()
+
+    const isEmpate = mwSel.includes('empate') || mwSel.includes('draw') || mwSel === 'x'
+    const bttsNao = bttsSel.includes('não') || bttsSel.includes('nao') || bttsSel.includes('no')
+    const bttsSim = bttsSel.includes('sim') || bttsSel.includes('yes')
+    const isUnder = ouSel.includes('under')
+
+    // Empate + BTTS Não = proibido (só caberia 0x0)
+    if (isEmpate && bttsNao && bttsMarket) {
+      bttsMarket.selection = 'Sim'
+      bttsMarket.odd = odds.btts ? parseFloat(odds.btts.yes) : null
+      bttsMarket.reasoning = 'Corrigido automaticamente: Empate + BTTS Não só é possível em 0x0. Se há empate, ambas marcam (ex: 1x1).'
+    }
+
+    // Under 2.5 + BTTS Sim = proibido (só caberia 1x1)
+    if (isUnder && bttsSim && bttsMarket) {
+      bttsMarket.selection = 'Não'
+      bttsMarket.odd = odds.btts ? parseFloat(odds.btts.no) : null
+      bttsMarket.reasoning = 'Corrigido automaticamente: Under 2.5 + Ambas marcam Sim é restritivo demais (só 1x1).'
+    }
   } catch (err) {
     console.error('Erro análise IA:', err)
     return NextResponse.json({ error: 'Erro ao gerar análise' }, { status: 500 })
   }
 
-  // Salvar cache
   const admin = createAdminClient()
   await (admin as any).from('game_analyses').upsert({
     fixture_id: fixtureId,

@@ -5,9 +5,14 @@ import { getFixturesByDate, FEATURED_LEAGUES } from '@/lib/api-football'
 const FINISHED = ['FT', 'AET', 'PEN', 'ABD', 'WO', 'AWD', 'CANC']
 
 function getDateBRT(offsetDays: number): string {
-  const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
-  d.setDate(d.getDate() + offsetDays)
-  return d.toISOString().split('T')[0]
+  const now = new Date()
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now)
+  const y = parts.find(p => p.type === 'year')!.value
+  const m = parts.find(p => p.type === 'month')!.value
+  const d = parts.find(p => p.type === 'day')!.value
+  const base = new Date(`${y}-${m}-${d}T12:00:00`)
+  base.setDate(base.getDate() + offsetDays)
+  return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`
 }
 
 function dateLabel(dateStr: string): string {

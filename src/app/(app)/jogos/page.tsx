@@ -1,49 +1,76 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+'use client'
+
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { getFixturesByDate, FEATURED_LEAGUES } from '@/lib/api-football'
-import { ChevronRight, Clock, Trophy } from 'lucide-react'
+import { ChevronRight, Clock, Trophy, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-function statusLabel(short: string) {
-  if (['NS', 'TBD'].includes(short)) return { text: 'Em breve', cls: 'text-muted-foreground' }
-  if (['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE'].includes(short)) return { text: 'Ao vivo', cls: 'text-green-400' }
-  if (short === 'FT') return { text: 'Encerrado', cls: 'text-muted-foreground' }
-  return { text: short, cls: 'text-muted-foreground' }
+const FINISHED_STATUS = ['FT', 'AET', 'PEN', 'ABD', 'WO', 'AWD']
+const LIVE_STATUS = ['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE']
+
+interface Game {
+  fixture_id: number
+  home_team: string
+  away_team: string
+  league: string
+  country: string
+  time: string
+  status: string
+  home_goals?: number | null
+  away_goals?: number | null
+  elapsed?: number | null
+  has_analysis?: boolean
 }
 
-export default async function JogosPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+interface Day {
+  date: string
+  label: string
+  games: Game[]
+}
 
-  const today = new Date().toISOString().split('T')[0]
+export default function JogosPage() {
+  const [days, setDays] = useState<Day[]>([])
+  const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState<'ativos' | 'encerrados'>('ativos')
 
-  let fixtures = await getFixturesByDate(today).catch(() => [])
+  useEffect(() => { fetchGames() }, [])
 
-  // Filtrar apenas ligas destaque
-  const featuredIds = new Set(FEATURED_LEAGUES.map(l => l.id))
-  fixtures = fixtures.filter(f => featuredIds.has(f.league.id))
-
-  // Buscar quais jogos já têm análise em cache
-  const fixtureIds = fixtures.map(f => f.fixture.id)
-  const { data: analysed } = await supabase
-    .from('game_analyses')
-    .select('fixture_id')
-    .in('fixture_id', fixtureIds)
-    .returns<Array<{ fixture_id: number }>>()
-  const analysedIds = new Set((analysed ?? []).map(a => a.fixture_id))
-
-  // Agrupar por liga
-  const byLeague: Record<string, typeof fixtures> = {}
-  for (const f of fixtures) {
-    const key = f.league.name
-    if (!byLeague[key]) byLeague[key] = []
-    byLeague[key].push(f)
+  async function fetchGames() {
+    try {
+      const res = await fetch('/api/jogos/hoje-completo')
+      const json = await res.json()
+      if (json.success) setDays(json.days)
+    } catch {
+      // silencioso
+    } finally {
+      setLoading(false)
+    }
   }
 
+  // Separa todos os jogos em ativos e encerrados
+  const allGames = days.flatMap(d => d.games.map(g => ({ ...g, dayLabel: d.label, date: d.date })))
+  const ativos = allGames.filter(g => !FINISHED_STATUS.includes(g.status))
+  const encerrados = allGames.filter(g => FINISHED_STATUS.includes(g.status))
+
+  // Agrupa por liga dentro de cada aba
+  function groupByLeague(games: typeof allGames) {
+    const map: Record<string, typeof allGames> = {}
+    for (const g of games) {
+      const key = `${g.country} — ${g.league}`
+      if (!map[key]) map[key] = []
+      map[key].push(g)
+    }
+    return map
+  }
+
+  const ativosGroup = groupByLeague(ativos)
+  const encerradosGroup = groupByLeague(encerrados)
+  const currentGroup = tab === 'ativos' ? ativosGroup : encerradosGroup
+  const currentGames = tab === 'ativos' ? ativos : encerrados
+
   return (
-    <div className="p-4 max-w-lg mx-auto space-y-5 pb-24">
+    <div className="p-4 space-y-4 pb-24">
+      {/* Header */}
       <div className="pt-2">
         <h1 className="text-xl font-bold">Jogos de hoje</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
@@ -51,74 +78,128 @@ export default async function JogosPage() {
         </p>
       </div>
 
-      {fixtures.length === 0 && (
-        <div className="text-center py-16 space-y-2">
-          <Trophy className="h-10 w-10 text-muted-foreground mx-auto" />
-          <p className="font-semibold">Nenhum jogo hoje</p>
-          <p className="text-sm text-muted-foreground">Sem jogos nas ligas monitoradas.</p>
+      {/* Abas */}
+      <div className="flex gap-1">
+        <button
+          onClick={() => setTab('ativos')}
+          className={cn(
+            'flex-1 py-2 text-xs font-medium rounded-lg transition-all border',
+            tab === 'ativos'
+              ? 'bg-primary text-primary-foreground border-primary'
+              : 'border-border text-muted-foreground hover:border-primary/30'
+          )}
+        >
+          Em andamento / A jogar
+          {ativos.length > 0 && (
+            <span className={cn('ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full',
+              tab === 'ativos' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-muted-foreground'
+            )}>
+              {ativos.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setTab('encerrados')}
+          className={cn(
+            'flex-1 py-2 text-xs font-medium rounded-lg transition-all border',
+            tab === 'encerrados'
+              ? 'bg-primary text-primary-foreground border-primary'
+              : 'border-border text-muted-foreground hover:border-primary/30'
+          )}
+        >
+          Encerrados
+          {encerrados.length > 0 && (
+            <span className={cn('ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full',
+              tab === 'encerrados' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-muted-foreground'
+            )}>
+              {encerrados.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {loading && (
+        <div className="flex items-center justify-center py-16 gap-2">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          <span className="text-sm text-muted-foreground">Carregando jogos...</span>
         </div>
       )}
 
-      {Object.entries(byLeague).map(([leagueName, games]) => (
-        <div key={leagueName} className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Trophy className="h-3.5 w-3.5 text-muted-foreground" />
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{leagueName}</p>
+      {!loading && currentGames.length === 0 && (
+        <div className="text-center py-16 space-y-2">
+          <Trophy className="h-10 w-10 text-muted-foreground mx-auto" />
+          <p className="font-semibold">
+            {tab === 'ativos' ? 'Nenhum jogo ativo' : 'Nenhum jogo encerrado ainda'}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {tab === 'ativos' ? 'Sem jogos em andamento ou agendados hoje.' : 'Os jogos encerrados aparecerão aqui.'}
+          </p>
+        </div>
+      )}
+
+      {/* Lista por liga */}
+      {Object.entries(currentGroup).map(([leagueKey, games]) => (
+        <div key={leagueKey} className="space-y-2">
+          <div className="flex items-center gap-1.5 px-1">
+            <Trophy className="h-3 w-3 text-muted-foreground" />
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{leagueKey}</p>
           </div>
 
-          {games.map(f => {
-            const status = statusLabel(f.fixture.status.short)
-            const isLive = ['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE'].includes(f.fixture.status.short)
-            const isFinished = f.fixture.status.short === 'FT'
-            const hasAnalysis = analysedIds.has(f.fixture.id)
-            const time = new Date(f.fixture.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+          {games.map(g => {
+            const isLive = LIVE_STATUS.includes(g.status)
+            const isFinished = FINISHED_STATUS.includes(g.status)
 
             return (
               <Link
-                key={f.fixture.id}
-                href={`/jogos/${f.fixture.id}`}
-                className="block bg-card rounded-xl border border-border p-4 hover:border-primary/30 transition-colors"
+                key={g.fixture_id}
+                href={`/jogos/${g.fixture_id}`}
+                className={cn(
+                  'block bg-card rounded-xl border p-4 transition-colors',
+                  isFinished ? 'border-border opacity-70 hover:opacity-100 hover:border-primary/20' : 'border-border hover:border-primary/30'
+                )}
               >
                 <div className="flex items-center justify-between gap-2">
-                  {/* Times */}
-                  <div className="flex-1 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className={cn('text-sm font-medium', isFinished && f.goals.home !== null && f.goals.home > (f.goals.away ?? 0) && 'text-primary')}>
-                        {f.teams.home.name}
+                  <div className="flex-1 space-y-2 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={cn('text-sm font-medium truncate',
+                        isFinished && (g.home_goals ?? 0) > (g.away_goals ?? 0) && 'text-primary'
+                      )}>
+                        {g.home_team}
                       </span>
-                      {isLive || isFinished ? (
-                        <span className={cn('text-lg font-bold tabular-nums', isLive && 'text-primary')}>
-                          {f.goals.home ?? 0}
+                      {(isLive || isFinished) && (
+                        <span className={cn('text-lg font-bold tabular-nums shrink-0', isLive && 'text-primary')}>
+                          {g.home_goals ?? 0}
                         </span>
-                      ) : null}
+                      )}
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className={cn('text-sm font-medium', isFinished && f.goals.away !== null && f.goals.away > (f.goals.home ?? 0) && 'text-primary')}>
-                        {f.teams.away.name}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={cn('text-sm font-medium truncate',
+                        isFinished && (g.away_goals ?? 0) > (g.home_goals ?? 0) && 'text-primary'
+                      )}>
+                        {g.away_team}
                       </span>
-                      {isLive || isFinished ? (
-                        <span className={cn('text-lg font-bold tabular-nums', isLive && 'text-primary')}>
-                          {f.goals.away ?? 0}
+                      {(isLive || isFinished) && (
+                        <span className={cn('text-lg font-bold tabular-nums shrink-0', isLive && 'text-primary')}>
+                          {g.away_goals ?? 0}
                         </span>
-                      ) : null}
+                      )}
                     </div>
                   </div>
 
-                  {/* Status / Hora */}
                   <div className="flex flex-col items-center gap-1 shrink-0 w-16">
                     {isLive ? (
                       <span className="text-xs font-bold text-green-400 animate-pulse">
-                        {f.fixture.status.elapsed}&apos;
+                        {g.elapsed ?? ''}′
                       </span>
                     ) : isFinished ? (
-                      <span className="text-xs text-muted-foreground">FT</span>
+                      <span className="text-xs text-muted-foreground font-medium">FT</span>
                     ) : (
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Clock className="h-3 w-3" />
-                        {time}
+                        {g.time}
                       </div>
                     )}
-                    {hasAnalysis && (
+                    {g.has_analysis && (
                       <span className="text-[10px] bg-brand-muted text-primary px-1.5 py-0.5 rounded-full">IA</span>
                     )}
                   </div>

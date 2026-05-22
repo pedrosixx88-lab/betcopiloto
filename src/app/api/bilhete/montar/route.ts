@@ -49,6 +49,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Não foi possível analisar os jogos. Tente novamente.' }, { status: 400 })
   }
 
+  // Detectar jogos selecionados que não têm análise
+  const analysedIds = new Set(analyses.map(a => a.fixture_id))
+  const missingIds = fixture_ids.filter(id => !analysedIds.has(id))
+  const missingAlert = missingIds.length > 0
+    ? [`${missingIds.length} jogo(s) não puderam ser analisados e foram excluídos do bilhete. Tente analisá-los individualmente na aba Jogos.`]
+    : []
+
   // Calcular padrões do usuário por mercado
   const marketStats: Record<string, { won: number; total: number }> = {}
   for (const bet of bets ?? []) {
@@ -62,8 +69,11 @@ export async function POST(request: NextRequest) {
     .join('\n') || 'Sem histórico suficiente.'
 
   const gamesText = analyses.map(a => {
-    const summary = a.summary as { tip?: string; confidence?: string; markets?: Array<{ market: string; selection: string; reasoning: string; confidence: string }> }
-    const markets = summary?.markets?.map(m => `  - ${m.market}: ${m.selection} (${m.confidence}) — ${m.reasoning}`).join('\n') ?? ''
+    const summary = a.summary as { tip?: string; confidence?: string; markets?: Array<{ market: string; selection: string; reasoning: string; confidence: string; odd?: string | null }> }
+    const markets = summary?.markets?.map(m => {
+      const oddInfo = m.odd ? ` [odd real: ${m.odd}]` : ''
+      return `  - ${m.market}: ${m.selection} (${m.confidence})${oddInfo} — ${m.reasoning}`
+    }).join('\n') ?? ''
     return `${a.home_team} vs ${a.away_team} (${a.league}):\n  Tip principal: ${summary?.tip ?? 'N/A'}\n  Confiança: ${summary?.confidence ?? 'N/A'}\n${markets}`
   }).join('\n\n')
 
@@ -86,9 +96,10 @@ Monte um bilhete otimizado em JSON com o seguinte formato EXATO:
       "fixture_id": 123,
       "home_team": "...",
       "away_team": "...",
-      "market": "match_winner | over_under | both_teams_score",
+      "market": "match_winner | over_under | both_teams_score | corners | cards",
       "selection": "descrição da seleção",
-      "reasoning": "justificativa em 1 frase com dados reais"
+      "reasoning": "justificativa em 1 frase com dados reais",
+      "odd": "odd real do mercado se disponível, ou null"
     }
   ],
   "stake_suggested": 50.00,
@@ -97,26 +108,46 @@ Monte um bilhete otimizado em JSON com o seguinte formato EXATO:
 }
 
 Regras:
-- Máximo 4 seleções no bilhete
-- Prefira mercados onde o apostador tem melhor win rate
-- Se detectar mercado com win rate < 40%, adicione alerta em "alerts"
-- NÃO inclua odd estimada nem retorno potencial — o usuário vai consultar as odds na casa de apostas
+- Inclua APENAS seleções que os dados reais sustentam com confiança — qualidade acima de quantidade
+- Pode trazer 0, 1 ou 2 seleções por jogo dependendo do que os dados sustentam
+- Nunca mais de 2 seleções do mesmo jogo
+- 2 seleções do mesmo jogo só se forem mercados completamente diferentes e complementares (ex: match_winner + corners) — nunca mercados redundantes ou conflitantes
+- Se excluir um jogo por falta de confiança nos dados, adicione em "alerts": "Jogo X vs Y excluído: [motivo real com dados]"
+- Se detectar mercado com win rate < 40% no histórico do apostador, adicione alerta em "alerts"
+- Prefira mercados onde há odds reais disponíveis
+- Inclua a odd real quando disponível (campo "odd real" acima) — NÃO invente odds
 - Sempre justifique cada seleção com dados reais`
 
   try {
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
+      max_tokens: 2048,
       messages: [{ role: 'user', content: prompt }],
     })
 
     const text = response.content[0].type === 'text' ? response.content[0].text : ''
     const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) throw new Error('Resposta inválida')
+    if (!jsonMatch) throw new Error(`Resposta sem JSON: ${text.slice(0, 200)}`)
 
     const ticket = JSON.parse(jsonMatch[0])
+
+    // Permitir até 2 seleções por jogo — remove apenas a terceira em diante
+    if (Array.isArray(ticket.selections)) {
+      const countPerFixture: Record<number, number> = {}
+      ticket.selections = ticket.selections.filter((s: any) => {
+        countPerFixture[s.fixture_id] = (countPerFixture[s.fixture_id] ?? 0) + 1
+        return countPerFixture[s.fixture_id] <= 2
+      })
+    }
+
+    // Injetar alerta de jogos sem análise
+    if (missingAlert.length > 0) {
+      ticket.alerts = [...missingAlert, ...(ticket.alerts ?? [])]
+    }
+
     return NextResponse.json({ success: true, ticket })
-  } catch {
+  } catch (err) {
+    console.error('[bilhete/montar] erro:', err)
     return NextResponse.json({ error: 'Erro ao montar bilhete. Tente novamente.' }, { status: 500 })
   }
 }
