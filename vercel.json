@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/atualizar-apostas",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/briefing-diario",
+      "schedule": "0 12 * * *"
     }
   ]
 }

@@ -1,11 +1,20 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { TrendingUp, TrendingDown, Target, DollarSign, PlusCircle, ListFilter, Brain } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { BankrollChart } from '@/components/dashboard/bankroll-chart'
+import BriefingCard from '@/components/dashboard/briefing-card'
 import { cn } from '@/lib/utils'
+
+function getDateBRT(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date())
+  return `${parts.find(p => p.type === 'year')!.value}-${parts.find(p => p.type === 'month')!.value}-${parts.find(p => p.type === 'day')!.value}`
+}
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -19,6 +28,15 @@ export default async function DashboardPage() {
     .single<{ name: string | null; current_bankroll: number; initial_bankroll: number; onboarding_completed: boolean }>()
 
   if (!profile?.onboarding_completed) redirect('/onboarding')
+
+  // Buscar briefing do dia
+  const admin = createAdminClient()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: briefing } = await (admin as any)
+    .from('daily_briefings')
+    .select('content, games_count, created_at')
+    .eq('date', getDateBRT())
+    .single()
 
   const { data: bets } = await supabase
     .from('bets')
@@ -100,6 +118,9 @@ export default async function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* Briefing do dia */}
+      <BriefingCard initial={briefing ?? null} />
 
       {/* Cards de métricas */}
       <div className="grid grid-cols-2 gap-3">

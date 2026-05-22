@@ -28,6 +28,13 @@ export async function middleware(request: NextRequest) {
   const publicRoutes = ['/', '/login', '/register', '/auth/callback']
   const isPublic = publicRoutes.includes(pathname)
 
+  // Rotas de cron e briefing com secret não precisam de sessão
+  const cronSecret = process.env.CRON_SECRET
+  const authHeader = request.headers.get('authorization')
+  const isCronRoute = pathname.startsWith('/api/cron/') || pathname.startsWith('/api/briefing/')
+  const hasCronSecret = cronSecret && authHeader === `Bearer ${cronSecret}`
+  if (isCronRoute && hasCronSecret) return NextResponse.next()
+
   if (!user && !isPublic) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
