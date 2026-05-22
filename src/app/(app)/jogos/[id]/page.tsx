@@ -11,6 +11,7 @@ import {
   AlertTriangle, Ticket, TrendingUp, CheckCircle2, RefreshCw
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { MARKET_LABELS_SHORT as MARKET_LABELS, translateSelection } from '@/lib/labels'
 
 interface Market {
   market: string
@@ -61,17 +62,6 @@ const CONFIDENCE_COLOR = {
   alta: 'text-primary border-primary/30 bg-brand-muted',
   média: 'text-yellow-400 border-yellow-400/30 bg-yellow-400/10',
   baixa: 'text-muted-foreground border-border bg-muted/30',
-}
-
-const MARKET_LABELS: Record<string, string> = {
-  match_winner: '1X2',
-  over_under: 'Mais/Menos Gols',
-  both_teams_score: 'Ambas marcam',
-  corners: 'Escanteios',
-  cards: 'Cartões',
-  handicap: 'Handicap',
-  correct_score: 'Placar exato',
-  other: 'Outro',
 }
 
 export default function JogoPage() {
@@ -223,7 +213,7 @@ export default function JogoPage() {
                             {analysis.summary.confidence}
                           </Badge>
                         </div>
-                        <p className="text-sm font-medium mt-1">{analysis.summary.tip}</p>
+                        <p className="text-sm font-medium mt-1">{translateSelection(analysis.summary.tip)}</p>
                       </div>
                     </div>
                   </CardContent>
@@ -251,7 +241,7 @@ export default function JogoPage() {
                               </Badge>
                             </div>
                           </div>
-                          <p className="text-sm font-medium">{m.selection}</p>
+                          <p className="text-sm font-medium">{translateSelection(m.selection)}</p>
                           <p className="text-xs text-muted-foreground">{m.reasoning}</p>
                           {m.odd && (
                             <p className="text-[10px] text-yellow-400/70">⚠ Odd registrada no momento da análise — verifique o valor atual na Bet365</p>
@@ -392,7 +382,7 @@ export default function JogoPage() {
                         <p className="text-xs text-muted-foreground">{s.home_team} vs {s.away_team}</p>
                         <div className="flex items-center gap-2">
                           <span className="text-xs bg-secondary px-2 py-0.5 rounded-md shrink-0">{MARKET_LABELS[s.market] ?? s.market}</span>
-                          <span className="text-sm font-medium flex-1">{s.selection}</span>
+                          <span className="text-sm font-medium flex-1">{translateSelection(s.selection)}</span>
                           {s.odd && (
                             <span className="text-xs font-bold text-primary bg-brand-muted border border-primary/20 px-1.5 py-0.5 rounded shrink-0">
                               {s.odd}

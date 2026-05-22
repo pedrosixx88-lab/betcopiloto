@@ -9,6 +9,7 @@ import {
   CheckCircle2, Trophy, X, Clock, Calendar
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { MARKET_LABELS_SHORT as MARKET_LABELS_MAP, translateSelection } from '@/lib/labels'
 
 interface Game {
   fixture_id: number
@@ -43,16 +44,6 @@ interface TicketResult {
   alerts: string[]
 }
 
-const MARKET_LABELS: Record<string, string> = {
-  match_winner: '1X2',
-  over_under: 'Mais/Menos Gols',
-  both_teams_score: 'Ambas marcam',
-  corners: 'Escanteios',
-  cards: 'Cartões',
-  handicap: 'Handicap',
-  correct_score: 'Placar exato',
-  other: 'Outro',
-}
 
 export default function BilhetePage() {
   const [days, setDays] = useState<Day[]>([])
@@ -161,9 +152,9 @@ export default function BilhetePage() {
                 <p className="text-xs text-muted-foreground">{s.home_team} vs {s.away_team}</p>
                 <div className="flex items-center gap-2">
                   <span className="text-xs bg-secondary px-2 py-0.5 rounded-md shrink-0">
-                    {MARKET_LABELS[s.market] ?? s.market}
+                    {MARKET_LABELS_MAP[s.market] ?? s.market}
                   </span>
-                  <span className="text-sm font-semibold flex-1">{s.selection}</span>
+                  <span className="text-sm font-semibold flex-1">{translateSelection(s.selection)}</span>
                   {s.odd && (
                     <span className="text-xs font-bold text-primary bg-brand-muted border border-primary/20 px-1.5 py-0.5 rounded shrink-0">
                       {s.odd}

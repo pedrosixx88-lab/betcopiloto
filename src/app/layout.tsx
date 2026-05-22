@@ -8,10 +8,24 @@ const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
 const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'BetCopiloto — Seu segundo cérebro nas apostas',
-  description: 'Registre apostas, acompanhe sua performance e receba bilhetes personalizados com IA.',
+  title: 'BetCopiloto — Seu segundo cérebro nas apostas esportivas',
+  description: 'Registre apostas com um print, acompanhe ROI e win rate, e receba bilhetes personalizados com IA. Grátis para começar.',
   manifest: '/manifest.json',
   appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'BetCopiloto' },
+  keywords: ['apostas esportivas', 'bet', 'bilhete', 'IA', 'inteligência artificial', 'ROI', 'win rate', 'Betano', 'Bet365'],
+  openGraph: {
+    title: 'BetCopiloto — Seu segundo cérebro nas apostas',
+    description: 'Registre apostas com um print, acompanhe sua performance e receba bilhetes personalizados com IA.',
+    type: 'website',
+    locale: 'pt_BR',
+    siteName: 'BetCopiloto',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'BetCopiloto — Apostas com inteligência',
+    description: 'Registre apostas com um print, acompanhe sua performance e receba bilhetes personalizados com IA.',
+  },
+  robots: { index: true, follow: true },
 }
 
 export const viewport: Viewport = {

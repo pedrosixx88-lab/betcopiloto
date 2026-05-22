@@ -74,7 +74,7 @@ export default function BriefingCard({ initial }: Props) {
               Briefing ainda não gerado para hoje.
             </p>
             <button
-              onClick={generate}
+              onClick={() => generate(false)}
               disabled={loading}
               className="text-xs text-primary flex items-center gap-1.5 hover:opacity-80 transition-opacity"
             >
