@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 export const dynamic = 'force-dynamic'
 
 const MP_BASE = 'https://api.mercadopago.com'
-const PLAN_PRICE = 29.90
+const PLAN_PRICE = 49.90
 
 export async function GET() {
   const supabase = await createClient()

@@ -80,7 +80,7 @@ export default async function PlanosPage() {
                 <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full">Plano atual</span>
               )}
             </div>
-            <p className="text-2xl font-bold mt-1 text-primary">R$ 29<span className="text-sm font-normal text-muted-foreground">/mês</span></p>
+            <p className="text-2xl font-bold mt-1 text-primary">R$ 49<span className="text-sm font-normal text-muted-foreground">/mês</span></p>
           </CardHeader>
           <CardContent className="px-5 pb-5 space-y-2">
             {PRO_FEATURES.map(f => (
@@ -95,7 +95,7 @@ export default async function PlanosPage() {
                   href="/api/checkout/criar"
                   className={cn(buttonVariants({ size: 'sm' }), 'w-full justify-center')}
                 >
-                  <Crown className="h-4 w-4 mr-1.5" /> Assinar Pro — R$ 29/mês
+                  <Crown className="h-4 w-4 mr-1.5" /> Assinar Pro — R$ 49/mês
                 </Link>
                 <p className="text-[10px] text-muted-foreground text-center mt-2">
                   Cancele quando quiser. Pagamento via Mercado Pago.
