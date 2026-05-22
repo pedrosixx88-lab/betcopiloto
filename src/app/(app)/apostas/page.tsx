@@ -6,21 +6,13 @@ import { Badge } from '@/components/ui/badge'
 import { PlusCircle, TrendingUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { BetMarket, BetStatus } from '@/types/database'
+import { MARKET_LABELS_SHORT } from '@/lib/labels'
 
 const STATUS_CONFIG: Record<BetStatus, { label: string; class: string }> = {
-  pending: { label: 'Pendente', class: 'bg-muted text-muted-foreground' },
-  won:     { label: 'Green ✓', class: 'bg-brand-muted text-primary border-primary/30' },
-  lost:    { label: 'Red ✗',   class: 'bg-destructive/10 text-destructive border-destructive/30' },
-  void:    { label: 'Void',    class: 'bg-muted text-muted-foreground' },
-}
-
-const MARKET_LABELS: Record<BetMarket, string> = {
-  match_winner: '1X2',
-  over_under: 'O/U',
-  both_teams_score: 'Ambas marcam',
-  handicap: 'Handicap',
-  correct_score: 'Placar',
-  other: 'Outro',
+  pending: { label: 'Pendente',  class: 'bg-muted text-muted-foreground' },
+  won:     { label: 'Green ✓',  class: 'bg-brand-muted text-primary border-primary/30' },
+  lost:    { label: 'Red ✗',    class: 'bg-destructive/10 text-destructive border-destructive/30' },
+  void:    { label: 'Anulada',  class: 'bg-muted text-muted-foreground' },
 }
 
 export default async function ApostasPage({
@@ -138,7 +130,7 @@ export default async function ApostasPage({
                 {/* Detalhes */}
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   <span className="bg-secondary px-2 py-0.5 rounded-md">
-                    {MARKET_LABELS[bet.market]}
+                    {MARKET_LABELS_SHORT[bet.market] ?? bet.market}
                   </span>
                   <span>{bet.selection}</span>
                 </div>

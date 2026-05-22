@@ -13,16 +13,9 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-type Market = 'match_winner' | 'over_under' | 'both_teams_score' | 'handicap' | 'correct_score' | 'other'
+import { MARKET_LABELS } from '@/lib/labels'
 
-const MARKET_LABELS: Record<Market, string> = {
-  match_winner: 'Resultado final (1X2)',
-  over_under: 'Mais/Menos gols',
-  both_teams_score: 'Ambas marcam',
-  handicap: 'Handicap',
-  correct_score: 'Placar exato',
-  other: 'Outro',
-}
+type Market = 'match_winner' | 'over_under' | 'both_teams_score' | 'handicap' | 'correct_score' | 'other'
 
 interface BetForm {
   home_team: string

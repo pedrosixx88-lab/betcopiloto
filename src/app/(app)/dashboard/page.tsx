@@ -92,10 +92,7 @@ export default async function DashboardPage() {
     if (b.status === 'won') byMarket[b.market].won++
   })
 
-  const MARKET_LABELS: Record<string, string> = {
-    match_winner: '1X2', over_under: 'Mais/Menos', both_teams_score: 'Ambas marcam',
-    handicap: 'Handicap', correct_score: 'Placar exato', other: 'Outro',
-  }
+  const { MARKET_LABELS_SHORT: MARKET_LABELS } = await import('@/lib/labels')
 
   const marketStats = Object.entries(byMarket)
     .map(([market, s]) => ({ market, label: MARKET_LABELS[market] ?? market, winRate: ((s.won / s.total) * 100).toFixed(0), total: s.total }))
