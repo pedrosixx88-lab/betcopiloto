@@ -101,11 +101,11 @@ Monte um bilhete otimizado em JSON com o seguinte formato EXATO:
 }
 
 Regras:
-- Máximo 4 seleções no bilhete
+- MÁXIMO 1 seleção por jogo — escolha o mercado mais forte de cada jogo, não repita o mesmo fixture_id
+- Máximo 4 seleções no total
 - Prefira mercados onde o apostador tem melhor win rate e onde há odds reais disponíveis
 - Se detectar mercado com win rate < 40%, adicione alerta em "alerts"
-- Inclua a odd real quando disponível na análise (campo "odd real" acima)
-- NÃO invente odds — use apenas as que estão explicitamente marcadas como "odd real" nos dados
+- Inclua a odd real quando disponível (campo "odd real" acima) — NÃO invente odds
 - Sempre justifique cada seleção com dados reais`
 
   try {
@@ -120,6 +120,17 @@ Regras:
     if (!jsonMatch) throw new Error('Resposta inválida')
 
     const ticket = JSON.parse(jsonMatch[0])
+
+    // Garantir máximo 1 seleção por jogo — se a IA repetir fixture_id, mantém só a primeira
+    if (Array.isArray(ticket.selections)) {
+      const seen = new Set<number>()
+      ticket.selections = ticket.selections.filter((s: any) => {
+        if (seen.has(s.fixture_id)) return false
+        seen.add(s.fixture_id)
+        return true
+      })
+    }
+
     return NextResponse.json({ success: true, ticket })
   } catch {
     return NextResponse.json({ error: 'Erro ao montar bilhete. Tente novamente.' }, { status: 500 })
