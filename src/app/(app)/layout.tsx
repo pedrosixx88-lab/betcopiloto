@@ -11,9 +11,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen flex flex-col">
       <BottomNav />
       <main className="flex-1 pb-20 md:pb-8 md:pt-14">
-        <div className="max-w-5xl mx-auto w-full">
-          {children}
-        </div>
+        {children}
       </main>
     </div>
   )

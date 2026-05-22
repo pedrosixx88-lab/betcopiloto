@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getFixturesByDate, FEATURED_LEAGUES } from '@/lib/api-football'
 
+export const dynamic = 'force-dynamic'
+
 const FINISHED = ['FT', 'AET', 'PEN', 'ABD', 'WO', 'AWD', 'CANC']
 
 function getDateBRT(offsetDays: number): string {

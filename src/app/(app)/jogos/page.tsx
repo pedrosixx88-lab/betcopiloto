@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { ChevronRight, Clock, Trophy, Loader2 } from 'lucide-react'
+import { ChevronRight, Clock, Trophy, Loader2, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const FINISHED_STATUS = ['FT', 'AET', 'PEN', 'ABD', 'WO', 'AWD']
@@ -31,21 +31,28 @@ interface Day {
 export default function JogosPage() {
   const [days, setDays] = useState<Day[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [tab, setTab] = useState<'ativos' | 'encerrados'>('ativos')
 
-  useEffect(() => { fetchGames() }, [])
-
-  async function fetchGames() {
+  const fetchGames = useCallback(async (manual = false) => {
+    if (manual) setRefreshing(true)
     try {
-      const res = await fetch('/api/jogos/hoje-completo')
+      const res = await fetch('/api/jogos/hoje-completo', { cache: 'no-store' })
       const json = await res.json()
       if (json.success) setDays(json.days)
     } catch {
       // silencioso
     } finally {
       setLoading(false)
+      if (manual) setRefreshing(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    fetchGames()
+    const interval = setInterval(() => fetchGames(), 60_000)
+    return () => clearInterval(interval)
+  }, [fetchGames])
 
   // Separa todos os jogos em ativos e encerrados
   const allGames = days.flatMap(d => d.games.map(g => ({ ...g, dayLabel: d.label, date: d.date })))
@@ -71,11 +78,21 @@ export default function JogosPage() {
   return (
     <div className="p-4 space-y-4 pb-24">
       {/* Header */}
-      <div className="pt-2">
-        <h1 className="text-xl font-bold">Jogos de hoje</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
-        </p>
+      <div className="pt-2 flex items-start justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-bold">Jogos de hoje</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+          </p>
+        </div>
+        <button
+          onClick={() => fetchGames(true)}
+          disabled={refreshing}
+          className="mt-1 text-muted-foreground hover:text-foreground transition-colors"
+          title="Atualizar jogos"
+        >
+          <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
+        </button>
       </div>
 
       {/* Abas */}

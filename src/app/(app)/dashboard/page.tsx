@@ -99,7 +99,7 @@ export default async function DashboardPage() {
     .sort((a, b) => b.total - a.total)
 
   return (
-    <div className="p-4 max-w-lg mx-auto space-y-5 pb-24">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-5 pb-24">
       {/* Header */}
       <div className="flex items-start justify-between gap-2 pt-2">
         <div>
@@ -116,11 +116,8 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Briefing do dia */}
-      <BriefingCard initial={briefing ?? null} />
-
-      {/* Cards de métricas */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* Cards de métricas — 2 cols mobile, 4 cols desktop */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card>
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs text-muted-foreground font-medium flex items-center gap-1">
@@ -156,7 +153,7 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent className="px-4 pb-3">
             <p className="text-2xl font-bold">{winRate ? `${winRate}%` : '—'}</p>
-            <p className="text-xs text-muted-foreground">{settledBets} resolvidas · {pendingBets} pendentes</p>
+            <p className="text-xs text-muted-foreground">{settledBets} res. · {pendingBets} pend.</p>
           </CardContent>
         </Card>
 
@@ -175,53 +172,57 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {/* Gráfico de evolução */}
-      {chartData.length >= 2 && (
-        <Card>
-          <CardHeader className="pb-2 pt-3 px-4">
-            <CardTitle className="text-sm font-semibold">Evolução da banca</CardTitle>
-          </CardHeader>
-          <CardContent className="px-2 pb-3">
-            <BankrollChart data={chartData} initialBankroll={initial} />
-          </CardContent>
-        </Card>
-      )}
+      {/* Briefing + gráfico/mercado lado a lado no desktop */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
+        <BriefingCard initial={briefing ?? null} />
 
-      {/* Breakdown por mercado */}
-      {marketStats.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2 pt-3 px-4">
-            <CardTitle className="text-sm font-semibold">Performance por mercado</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-3 space-y-2">
-            {marketStats.map(m => (
-              <div key={m.market} className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">{m.label}</span>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted-foreground">{m.total} apostas</span>
-                  <span className={cn('font-semibold text-xs', parseFloat(m.winRate) >= 50 ? 'text-primary' : 'text-destructive')}>
-                    {m.winRate}% win
-                  </span>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+        <div className="space-y-5">
+          {chartData.length >= 2 && (
+            <Card>
+              <CardHeader className="pb-2 pt-3 px-4">
+                <CardTitle className="text-sm font-semibold">Evolução da banca</CardTitle>
+              </CardHeader>
+              <CardContent className="px-2 pb-3">
+                <BankrollChart data={chartData} initialBankroll={initial} />
+              </CardContent>
+            </Card>
+          )}
 
-      {/* Empty state */}
-      {totalBets === 0 && (
-        <Card className="border-dashed">
-          <CardContent className="py-12 text-center space-y-3">
-            <TrendingUp className="h-10 w-10 text-muted-foreground mx-auto" />
-            <h3 className="font-semibold">Nenhuma aposta ainda</h3>
-            <p className="text-sm text-muted-foreground">Registre sua primeira aposta para ver sua performance.</p>
-            <Link href="/apostas/nova" className={buttonVariants({ size: 'sm' })}>
-              <PlusCircle className="h-4 w-4 mr-1" /> Registrar aposta
-            </Link>
-          </CardContent>
-        </Card>
-      )}
+          {marketStats.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2 pt-3 px-4">
+                <CardTitle className="text-sm font-semibold">Performance por mercado</CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-3 space-y-2">
+                {marketStats.map(m => (
+                  <div key={m.market} className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{m.label}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground">{m.total} apostas</span>
+                      <span className={cn('font-semibold text-xs', parseFloat(m.winRate) >= 50 ? 'text-primary' : 'text-destructive')}>
+                        {m.winRate}% win
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {totalBets === 0 && (
+            <Card className="border-dashed">
+              <CardContent className="py-12 text-center space-y-3">
+                <TrendingUp className="h-10 w-10 text-muted-foreground mx-auto" />
+                <h3 className="font-semibold">Nenhuma aposta ainda</h3>
+                <p className="text-sm text-muted-foreground">Registre sua primeira aposta para ver sua performance.</p>
+                <Link href="/apostas/nova" className={buttonVariants({ size: 'sm' })}>
+                  <PlusCircle className="h-4 w-4 mr-1" /> Registrar aposta
+                </Link>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
 
       {/* Dica IA — só aparece com dados suficientes */}
       {settledBets >= 3 && (

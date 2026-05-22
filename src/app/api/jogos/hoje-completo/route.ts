@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getFixturesByDate, FEATURED_LEAGUES } from '@/lib/api-football'
 
+export const dynamic = 'force-dynamic'
+
 function getDateBRT(offsetDays: number): string {
   const now = new Date()
   // Formata direto em BRT sem converter para UTC
@@ -65,22 +67,35 @@ export async function GET() {
     .returns<Array<{ fixture_id: number }>>()
   const analysedIds = new Set((analysed ?? []).map(a => a.fixture_id))
 
+  const LIVE_STATUS = ['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE']
+  const nowMs = Date.now()
+
   const games = filtered
-    .map(f => ({
-      fixture_id: f.fixture.id,
-      home_team: f.teams.home.name,
-      away_team: f.teams.away.name,
-      league: leagueMap[f.league.id]?.name ?? f.league.name,
-      country: leagueMap[f.league.id]?.country ?? f.league.country,
-      time: new Date(f.fixture.date).toLocaleTimeString('pt-BR', {
-        hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo',
-      }),
-      status: f.fixture.status.short,
-      home_goals: f.goals.home,
-      away_goals: f.goals.away,
-      elapsed: f.fixture.status.elapsed,
-      has_analysis: analysedIds.has(f.fixture.id),
-    }))
+    .map(f => {
+      let status = f.fixture.status.short
+      // Fallback: API plano gratuito às vezes não atualiza o status final.
+      // Se o jogo consta como "ao vivo" mas já passou 3h do kickoff, forçar FT.
+      if (LIVE_STATUS.includes(status)) {
+        const kickoffMs = new Date(f.fixture.date).getTime()
+        const elapsed = nowMs - kickoffMs
+        if (elapsed > 2.5 * 60 * 60 * 1000) status = 'FT'
+      }
+      return {
+        fixture_id: f.fixture.id,
+        home_team: f.teams.home.name,
+        away_team: f.teams.away.name,
+        league: leagueMap[f.league.id]?.name ?? f.league.name,
+        country: leagueMap[f.league.id]?.country ?? f.league.country,
+        time: new Date(f.fixture.date).toLocaleTimeString('pt-BR', {
+          hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo',
+        }),
+        status,
+        home_goals: f.goals.home,
+        away_goals: f.goals.away,
+        elapsed: f.fixture.status.elapsed,
+        has_analysis: analysedIds.has(f.fixture.id),
+      }
+    })
     .sort((a, b) => a.time.localeCompare(b.time))
 
   const days = games.length > 0
