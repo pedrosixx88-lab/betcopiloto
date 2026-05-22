@@ -23,8 +23,15 @@ export async function GET(request: NextRequest) {
       }
     )
 
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
-    if (!error) {
+    const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code)
+    if (!error && sessionData.user) {
+      const refCode = sessionData.user.user_metadata?.referred_by
+      if (refCode) {
+        await supabase
+          .from('profiles')
+          .update({ referred_by: refCode })
+          .eq('id', sessionData.user.id)
+      }
       return NextResponse.redirect(`${origin}/onboarding`)
     }
   }

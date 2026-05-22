@@ -13,6 +13,20 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
+  // Gate: montador de bilhete é exclusivo do plano Pro
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('plan, plan_expires_at')
+    .eq('id', user.id)
+    .single<{ plan: string; plan_expires_at: string | null }>()
+
+  const isPro = profile?.plan === 'pro' &&
+    (!profile.plan_expires_at || new Date(profile.plan_expires_at) > new Date())
+
+  if (!isPro) {
+    return NextResponse.json({ error: 'upgrade_required', message: 'O montador de bilhete é exclusivo do plano Pro.' }, { status: 403 })
+  }
+
   const body = await request.json()
   const parsed = Schema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Dados inválidos' }, { status: 400 })

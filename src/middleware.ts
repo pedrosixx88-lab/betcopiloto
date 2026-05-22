@@ -28,6 +28,9 @@ export async function middleware(request: NextRequest) {
   const publicRoutes = ['/', '/login', '/register', '/auth/callback']
   const isPublic = publicRoutes.includes(pathname)
 
+  // Webhook do Mercado Pago — sem autenticação
+  if (pathname.startsWith('/api/webhook/')) return NextResponse.next()
+
   // Rotas de cron e briefing com secret não precisam de sessão
   const cronSecret = process.env.CRON_SECRET
   const authHeader = request.headers.get('authorization')

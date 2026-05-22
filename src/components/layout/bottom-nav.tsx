@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, BarChart3, Trophy, Ticket } from 'lucide-react'
+import { LayoutDashboard, BarChart3, Trophy, Ticket, Crown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
@@ -10,6 +10,10 @@ const NAV_ITEMS = [
   { href: '/apostas', label: 'Apostas', icon: BarChart3 },
   { href: '/jogos', label: 'Jogos', icon: Trophy },
   { href: '/bilhete', label: 'Bilhete', icon: Ticket },
+]
+
+const DESKTOP_EXTRA = [
+  { href: '/planos', label: 'Planos', icon: Crown },
 ]
 
 export default function BottomNav() {
@@ -44,7 +48,7 @@ export default function BottomNav() {
         <div className="max-w-5xl mx-auto w-full px-6 flex items-center justify-between">
           <span className="font-bold text-primary text-lg">BetCopiloto</span>
           <div className="flex items-center gap-1">
-            {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+            {[...NAV_ITEMS, ...DESKTOP_EXTRA].map(({ href, label, icon: Icon }) => {
               const active = pathname === href || pathname.startsWith(href + '/')
               return (
                 <Link
