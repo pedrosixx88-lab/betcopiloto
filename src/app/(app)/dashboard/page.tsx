@@ -2,11 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { TrendingUp, TrendingDown, Target, DollarSign, PlusCircle, ListFilter, Brain } from 'lucide-react'
+import { TrendingUp, TrendingDown, Target, PlusCircle, ListFilter, Brain } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { BankrollChart } from '@/components/dashboard/bankroll-chart'
 import BriefingCard from '@/components/dashboard/briefing-card'
+import { BancaCard } from '@/components/dashboard/banca-card'
 import { cn } from '@/lib/utils'
 
 function getDateBRT(): string {
@@ -118,16 +119,7 @@ export default async function DashboardPage() {
 
       {/* Cards de métricas — 2 cols mobile, 4 cols desktop */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card>
-          <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-              <DollarSign className="h-3 w-3" /> Banca atual
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-3">
-            <p className="text-2xl font-bold">R$ {(profile?.current_bankroll ?? 0).toFixed(2)}</p>
-          </CardContent>
-        </Card>
+        <BancaCard initialValue={profile?.current_bankroll ?? 0} />
 
         <Card>
           <CardHeader className="pb-1 pt-3 px-4">
