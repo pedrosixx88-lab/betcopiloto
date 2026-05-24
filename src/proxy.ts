@@ -26,7 +26,7 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  const publicRoutes = ['/', '/login', '/register', '/auth/callback']
+  const publicRoutes = ['/', '/login', '/register', '/auth/callback', '/reset-password', '/update-password']
   const isPublic = publicRoutes.includes(pathname)
 
   // Webhook do Mercado Pago — sem autenticação
