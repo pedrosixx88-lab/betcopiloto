@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { sendPaymentReceiptEmail } from '@/lib/email'
 import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
@@ -94,6 +95,16 @@ export async function POST(request: NextRequest) {
       .select('referred_by')
       .eq('id', userId)
       .single()
+
+    // Enviar e-mail de recibo
+    const { data: userProfile } = await (admin as any)
+      .from('profiles')
+      .select('name, email')
+      .eq('id', userId)
+      .single()
+    if (userProfile?.email) {
+      await sendPaymentReceiptEmail(userProfile.email, userProfile.name ?? 'apostador').catch(() => {})
+    }
 
     if (profile?.referred_by) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

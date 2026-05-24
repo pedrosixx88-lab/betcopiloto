@@ -59,6 +59,9 @@ export default function OnboardingPage() {
 
     if (error) { toast.error('Erro ao salvar. Tente novamente.'); setLoading(false); return }
 
+    // Disparar e-mail de boas-vindas (fire-and-forget)
+    fetch('/api/email/boas-vindas', { method: 'POST' }).catch(() => {})
+
     router.refresh()
     router.push('/dashboard')
   }
