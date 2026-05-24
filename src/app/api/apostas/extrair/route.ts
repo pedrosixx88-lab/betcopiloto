@@ -4,16 +4,26 @@ import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 
 const BetExtractionSchema = z.object({
+  // Para bilhetes simples: times do jogo
   home_team: z.string(),
   away_team: z.string(),
   league: z.string().nullable(),
   market: z.enum(['match_winner', 'over_under', 'both_teams_score', 'handicap', 'correct_score', 'other']),
   selection: z.string(),
-  odd: z.number().positive(),
-  stake: z.number().positive(),
-  potential_return: z.number().positive(),
+  odd: z.number().nonnegative(),
+  stake: z.number().nonnegative(),
+  potential_return: z.number().nonnegative(),
   match_date: z.string(),
   bookmaker: z.string().nullable(),
+  // Campos extras para bilhetes múltiplos
+  is_multiple: z.boolean().optional(),
+  legs: z.array(z.object({
+    home_team: z.string(),
+    away_team: z.string(),
+    selection: z.string(),
+    odd: z.number(),
+    market: z.string(),
+  })).optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -76,42 +86,91 @@ export async function POST(request: NextRequest) {
             type: 'text',
             text: `Analise este print de bilhete de aposta esportiva e extraia as informações em JSON.
 
-Retorne APENAS o JSON, sem texto adicional, no seguinte formato:
+O bilhete pode ser simples (1 jogo) ou múltiplo/combinado (vários jogos).
+
+Retorne APENAS o JSON, sem texto adicional:
+
+Para bilhete SIMPLES (1 jogo):
 {
+  "is_multiple": false,
   "home_team": "nome do time da casa",
   "away_team": "nome do time visitante",
   "league": "nome da liga ou null",
   "market": "match_winner | over_under | both_teams_score | handicap | correct_score | other",
-  "selection": "descrição da seleção feita (ex: 'Flamengo', 'Over 2.5', 'Ambas marcam')",
+  "selection": "descrição da seleção (ex: 'Flamengo', 'Over 2.5', 'Ambas marcam')",
   "odd": 1.85,
   "stake": 50.00,
   "potential_return": 92.50,
   "match_date": "YYYY-MM-DD",
-  "bookmaker": "nome da casa de apostas ou null"
+  "bookmaker": "nome da casa ou null"
 }
 
-Regras:
+Para bilhete MÚLTIPLO/COMBINADO (2+ jogos):
+{
+  "is_multiple": true,
+  "home_team": "Time casa do 1º jogo",
+  "away_team": "Time visitante do 1º jogo",
+  "league": null,
+  "market": "other",
+  "selection": "Múltipla: [Seleção1] + [Seleção2] + ...",
+  "odd": 9.99,
+  "stake": 50.00,
+  "potential_return": 499.50,
+  "match_date": "YYYY-MM-DD",
+  "bookmaker": "nome da casa ou null",
+  "legs": [
+    { "home_team": "Time A", "away_team": "Time B", "selection": "Ambas marcam - Sim", "odd": 2.15, "market": "both_teams_score" },
+    { "home_team": "Time C", "away_team": "Time D", "selection": "Ambas marcam - Sim", "odd": 3.40, "market": "both_teams_score" }
+  ]
+}
+
+Regras de mercado:
 - match_winner: resultado final (1X2)
 - over_under: mais/menos gols
 - both_teams_score: ambas as equipes marcam
 - handicap: handicap asiático ou europeu
 - correct_score: placar exato
 - other: qualquer outro mercado
-- Se houver múltiplas apostas no bilhete, extraia apenas a primeira
-- Se não conseguir identificar algum campo, use null para strings e 0 para números`,
+
+Regras gerais:
+- stake: valor apostado (procure "Valor", "Aposta", "Investimento" no bilhete — pode estar no final)
+- potential_return: retorno potencial (procure "Retorno", "Ganho potencial", "Possível retorno")
+- Se não encontrar stake ou potential_return, use 0
+- odd: para múltipla, use a odd total do bilhete
+- Se não conseguir identificar algum campo string, use null`,
           },
         ],
       }],
     })
 
     const text = response.content[0].type === 'text' ? response.content[0].text : ''
+
     const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) throw new Error('Resposta inválida da IA')
+    if (!jsonMatch) throw new Error('Sem JSON na resposta')
 
     const parsed = JSON.parse(jsonMatch[0])
-    extracted = BetExtractionSchema.parse(parsed)
+
+    const result = BetExtractionSchema.safeParse(parsed)
+    if (!result.success) {
+      // Tenta usar os dados mesmo assim, com fallbacks
+      extracted = {
+        home_team: parsed.home_team ?? '',
+        away_team: parsed.away_team ?? '',
+        league: parsed.league ?? null,
+        market: parsed.market ?? 'other',
+        selection: parsed.selection ?? '',
+        odd: Number(parsed.odd) || 0,
+        stake: Number(parsed.stake) || 0,
+        potential_return: Number(parsed.potential_return) || 0,
+        match_date: parsed.match_date ?? new Date().toISOString().split('T')[0],
+        bookmaker: parsed.bookmaker ?? null,
+        is_multiple: parsed.is_multiple ?? false,
+        legs: parsed.legs ?? null,
+      } as z.infer<typeof BetExtractionSchema>
+    } else {
+      extracted = result.data
+    }
   } catch {
-    // Retorna dados parciais com screenshot_url para o usuário preencher manualmente
     return NextResponse.json({
       success: false,
       screenshot_url: path,

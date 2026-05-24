@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import webpush from 'web-push'
 import { createAdminClient } from '@/lib/supabase/admin'
+import crypto from 'crypto'
+
+function timingSafeEqual(a: string, b: string): boolean {
+  try {
+    return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b))
+  } catch {
+    return false
+  }
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +20,8 @@ export async function GET(request: NextRequest) {
     process.env.VAPID_PRIVATE_KEY!,
   )
   const auth = request.headers.get('authorization')
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  const expected = `Bearer ${process.env.CRON_SECRET}`
+  if (!process.env.CRON_SECRET || !auth || !timingSafeEqual(auth, expected)) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
 

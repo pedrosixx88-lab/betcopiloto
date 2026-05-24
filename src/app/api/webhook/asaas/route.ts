@@ -124,8 +124,8 @@ export async function POST(request: NextRequest) {
         await (admin as any).from('subscriptions').update({
           asaas_subscription_id: subscription.id,
         }).eq('user_id', userId).eq('asaas_payment_id', payment.id)
-      } catch (err) {
-        console.error('[webhook/asaas] erro ao criar subscription recorrente:', err)
+      } catch {
+        console.error('[webhook/asaas] erro ao criar subscription recorrente')
       }
     }
 

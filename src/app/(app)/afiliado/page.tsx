@@ -7,6 +7,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import AfiliadoCopyButton from '@/components/afiliado/copy-button'
+import SaqueForm from '@/components/afiliado/saque-form'
 
 export default async function AfiliadoPage() {
   const supabase = await createClient()
@@ -19,7 +20,7 @@ export default async function AfiliadoPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let { data: affiliate } = await (admin as any)
     .from('affiliates')
-    .select('*')
+    .select('id, code, total_earned, pending_payout, active_referrals, total_referrals, pix_key, pix_key_type')
     .eq('user_id', user.id)
     .single()
 
@@ -115,6 +116,18 @@ export default async function AfiliadoPage() {
         </CardContent>
       </Card>
 
+      {/* Saque */}
+      <Card>
+        <CardContent className="py-4 px-4">
+          <SaqueForm
+            pendingPayout={pendingPayout}
+            pixKey={affiliate?.pix_key ?? null}
+            pixKeyType={affiliate?.pix_key_type ?? null}
+            activeReferrals={affiliate?.active_referrals ?? 0}
+          />
+        </CardContent>
+      </Card>
+
       {/* Histórico de indicados */}
       {allReferrals.length > 0 && (
         <Card>
@@ -184,7 +197,7 @@ export default async function AfiliadoPage() {
       )}
 
       <p className="text-[10px] text-muted-foreground text-center pb-2">
-        Os pagamentos são processados todo dia 10 via Pix para saldos acima de R$ 20.
+        Saque disponível assim que você indicar o primeiro cliente. Pagamento via Pix.
       </p>
     </div>
   )

@@ -92,13 +92,13 @@ export default async function PlanosPage() {
             {!isPro && (
               <div className="pt-3">
                 <Link
-                  href="/api/checkout/criar"
+                  href="/checkout"
                   className={cn(buttonVariants({ size: 'sm' }), 'w-full justify-center')}
                 >
                   <Crown className="h-4 w-4 mr-1.5" /> Assinar Pro — R$ 49/mês
                 </Link>
                 <p className="text-[10px] text-muted-foreground text-center mt-2">
-                  Cancele quando quiser. Pagamento via Mercado Pago.
+                  Cancele quando quiser. Pagamento via Pix, cartão ou boleto.
                 </p>
               </div>
             )}

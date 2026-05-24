@@ -111,7 +111,7 @@ export default async function ApostasPage({
               : null
 
             return (
-              <div key={bet.id} className="bg-card rounded-xl border border-border p-4 space-y-3">
+              <Link key={bet.id} href={`/apostas/${bet.id}`} className="block bg-card rounded-xl border border-border p-4 space-y-3 hover:border-primary/40 transition-colors">
                 {/* Times + status */}
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -160,7 +160,7 @@ export default async function ApostasPage({
                   <span>{new Date(bet.match_date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
                   {bet.bookmaker && <span>{bet.bookmaker}</span>}
                 </div>
-              </div>
+              </Link>
             )
           })}
         </div>

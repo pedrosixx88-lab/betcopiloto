@@ -1,11 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getFixtureById, searchFixture, resolveMatchWinner } from '@/lib/api-football'
+import crypto from 'crypto'
 
-// Protegido por secret para evitar chamadas não autorizadas
+function timingSafeEqual(a: string, b: string): boolean {
+  try {
+    return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b))
+  } catch {
+    return false
+  }
+}
+
 export async function GET(request: NextRequest) {
   const secret = request.headers.get('x-cron-secret') ?? request.nextUrl.searchParams.get('secret')
-  if (secret !== process.env.CRON_SECRET) {
+  const expected = process.env.CRON_SECRET
+  if (!expected || !secret || !timingSafeEqual(secret, expected)) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
 

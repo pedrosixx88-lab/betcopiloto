@@ -17,6 +17,14 @@ import { MARKET_LABELS } from '@/lib/labels'
 
 type Market = 'match_winner' | 'over_under' | 'both_teams_score' | 'handicap' | 'correct_score' | 'other'
 
+interface BetLeg {
+  home_team: string
+  away_team: string
+  selection: string
+  odd: number
+  market: string
+}
+
 interface BetForm {
   home_team: string
   away_team: string
@@ -29,6 +37,8 @@ interface BetForm {
   match_date: string
   bookmaker: string
   screenshot_url: string
+  is_multiple: boolean
+  legs: BetLeg[] | null
 }
 
 const EMPTY_FORM: BetForm = {
@@ -36,6 +46,7 @@ const EMPTY_FORM: BetForm = {
   selection: '', odd: '', stake: '', potential_return: '',
   match_date: new Date().toISOString().split('T')[0],
   bookmaker: '', screenshot_url: '',
+  is_multiple: false, legs: null,
 }
 
 export default function NovaApostaPage() {
@@ -89,6 +100,8 @@ export default function NovaApostaPage() {
           match_date: d.match_date ?? EMPTY_FORM.match_date,
           bookmaker: d.bookmaker ?? '',
           screenshot_url: json.screenshot_url ?? '',
+          is_multiple: d.is_multiple ?? false,
+          legs: d.legs ?? null,
         })
         toast.success('Bilhete lido com sucesso! Confirme os dados.')
       } else {
@@ -164,7 +177,12 @@ export default function NovaApostaPage() {
           <div
             onDrop={handleDrop}
             onDragOver={(e) => e.preventDefault()}
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => {
+              if (fileInputRef.current) {
+                fileInputRef.current.removeAttribute('capture')
+                fileInputRef.current.click()
+              }
+            }}
             className="border-2 border-dashed border-border rounded-xl p-8 text-center cursor-pointer hover:border-primary/50 hover:bg-brand-muted transition-all space-y-3"
           >
             <div className="w-14 h-14 rounded-full bg-brand-muted flex items-center justify-center mx-auto">
@@ -183,22 +201,35 @@ export default function NovaApostaPage() {
             accept="image/jpeg,image/png,image/webp"
             className="hidden"
             onChange={handleInputChange}
-            capture="environment"
           />
 
-          {/* Câmera no mobile */}
-          <Button
-            className="w-full gap-2"
-            onClick={() => {
-              if (fileInputRef.current) {
-                fileInputRef.current.setAttribute('capture', 'environment')
-                fileInputRef.current.click()
-              }
-            }}
-          >
-            <Camera className="h-4 w-4" />
-            Tirar foto do bilhete
-          </Button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              className="w-full gap-2"
+              onClick={() => {
+                if (fileInputRef.current) {
+                  fileInputRef.current.setAttribute('capture', 'environment')
+                  fileInputRef.current.click()
+                }
+              }}
+            >
+              <Camera className="h-4 w-4" />
+              Tirar foto
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full gap-2"
+              onClick={() => {
+                if (fileInputRef.current) {
+                  fileInputRef.current.removeAttribute('capture')
+                  fileInputRef.current.click()
+                }
+              }}
+            >
+              <ImageIcon className="h-4 w-4" />
+              Galeria
+            </Button>
+          </div>
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
@@ -249,15 +280,28 @@ export default function NovaApostaPage() {
             </div>
           )}
 
+          {/* Jogos da múltipla */}
+          {form.is_multiple && form.legs && form.legs.length > 0 && (
+            <div className="rounded-xl border border-primary/30 bg-brand-muted p-3 space-y-2">
+              <p className="text-xs font-semibold text-primary uppercase tracking-wide">Bilhete múltiplo — {form.legs.length} jogos</p>
+              {form.legs.map((leg, i) => (
+                <div key={i} className="flex items-center justify-between text-sm">
+                  <span className="text-foreground">{leg.home_team} x {leg.away_team}</span>
+                  <span className="text-muted-foreground">{leg.selection} · {leg.odd}x</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Times */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Time da casa</Label>
+              <Label>{form.is_multiple ? 'Time casa (1º jogo)' : 'Time da casa'}</Label>
               <Input placeholder="Ex: Flamengo" value={form.home_team}
                 onChange={e => updateForm('home_team', e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Time visitante</Label>
+              <Label>{form.is_multiple ? 'Time visitante (1º jogo)' : 'Time visitante'}</Label>
               <Input placeholder="Ex: Palmeiras" value={form.away_team}
                 onChange={e => updateForm('away_team', e.target.value)} />
             </div>

@@ -11,6 +11,9 @@ export async function POST(
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
   const { id } = await params
+  const fixtureId = parseInt(id)
+  if (!isFinite(fixtureId) || isNaN(fixtureId)) return NextResponse.json({ error: 'ID inválido' }, { status: 400 })
+
   const { message, history } = await request.json() as {
     message: string
     history: Array<{ role: 'user' | 'assistant'; content: string }>
@@ -21,7 +24,7 @@ export async function POST(
   const { data: cached } = await supabase
     .from('game_analyses')
     .select('analysis, summary, home_team, away_team, league')
-    .eq('fixture_id', parseInt(id))
+    .eq('fixture_id', fixtureId)
     .single<{ analysis: string; summary: any; home_team: string; away_team: string; league: string }>()
 
   const gameContext = cached

@@ -11,7 +11,7 @@ const AFFILIATE_COMMISSION_PCT = 0.30
 
 function verifySignature(request: NextRequest, rawBody: string): boolean {
   const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET
-  if (!secret) return true // sem secret configurado, aceitar tudo (só dev)
+  if (!secret) return false // bloquear sempre se secret não configurado
 
   const xSignature = request.headers.get('x-signature') ?? ''
   const xRequestId = request.headers.get('x-request-id') ?? ''

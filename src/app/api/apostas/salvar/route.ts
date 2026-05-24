@@ -10,12 +10,20 @@ const SaveBetSchema = z.object({
   market: z.enum(['match_winner', 'over_under', 'both_teams_score', 'handicap', 'correct_score', 'other']),
   selection: z.string().min(1),
   odd: z.number().positive(),
-  stake: z.number().positive(),
-  potential_return: z.number().positive(),
+  stake: z.number().nonnegative(),
+  potential_return: z.number().nonnegative(),
   match_date: z.string(),
   bookmaker: z.string().nullable().optional(),
   screenshot_url: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
+  is_multiple: z.boolean().optional(),
+  legs: z.array(z.object({
+    home_team: z.string(),
+    away_team: z.string(),
+    selection: z.string(),
+    odd: z.number(),
+    market: z.string(),
+  })).nullable().optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -56,6 +64,8 @@ export async function POST(request: NextRequest) {
     notes: bet.notes ?? null,
     fixture_id: fixtureId,
     status: 'pending',
+    is_multiple: bet.is_multiple ?? false,
+    legs: bet.legs ?? null,
   }).select('id').single() as { data: { id: string } | null; error: unknown }
 
   if (error) {

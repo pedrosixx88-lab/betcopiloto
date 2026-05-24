@@ -189,7 +189,7 @@ export async function GET(
 
   const { id } = await params
   const fixtureId = parseInt(id)
-  if (isNaN(fixtureId)) return NextResponse.json({ error: 'ID inválido' }, { status: 400 })
+  if (!isFinite(fixtureId) || isNaN(fixtureId)) return NextResponse.json({ error: 'ID inválido' }, { status: 400 })
 
   const forceRefresh = request.nextUrl.searchParams.get('refresh') === '1'
 

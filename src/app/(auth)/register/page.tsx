@@ -55,6 +55,9 @@ function RegisterForm() {
           Enviamos um link de confirmação para <strong>{email}</strong>. Clique no link para ativar sua conta.
         </p>
         <p className="text-xs text-muted-foreground">Não recebeu? Verifique a pasta de spam.</p>
+        <Link href="/login" className="block text-sm text-primary hover:underline mt-2">
+          Já confirmei — ir para o login →
+        </Link>
       </div>
     )
   }

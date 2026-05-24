@@ -36,7 +36,7 @@ export async function GET() {
   })
 
   if (!res.ok) {
-    console.error('[checkout/cancelar] MP error:', await res.text())
+    console.error('[checkout/cancelar] MP error status:', res.status)
     return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/planos?msg=erro_cancelar`)
   }
 

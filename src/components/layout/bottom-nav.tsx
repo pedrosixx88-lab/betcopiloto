@@ -2,8 +2,9 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, BarChart3, Trophy, Ticket, Crown } from 'lucide-react'
+import { LayoutDashboard, BarChart3, Trophy, Ticket, Crown, Users, MoreHorizontal, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useState } from 'react'
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Início', icon: LayoutDashboard },
@@ -12,12 +13,19 @@ const NAV_ITEMS = [
   { href: '/bilhete', label: 'Bilhete', icon: Ticket },
 ]
 
+const MORE_ITEMS = [
+  { href: '/planos', label: 'Planos', icon: Crown },
+  { href: '/afiliado', label: 'Afiliados', icon: Users },
+]
+
 const DESKTOP_EXTRA = [
   { href: '/planos', label: 'Planos', icon: Crown },
+  { href: '/afiliado', label: 'Afiliados', icon: Users },
 ]
 
 export default function BottomNav() {
   const pathname = usePathname()
+  const [moreOpen, setMoreOpen] = useState(false)
 
   return (
     <>
@@ -30,6 +38,7 @@ export default function BottomNav() {
               <Link
                 key={href}
                 href={href}
+                onClick={() => setMoreOpen(false)}
                 className={cn(
                   'flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors min-w-0',
                   active ? 'text-primary' : 'text-muted-foreground'
@@ -40,8 +49,51 @@ export default function BottomNav() {
               </Link>
             )
           })}
+
+          {/* Botão "Mais" */}
+          <button
+            onClick={() => setMoreOpen(o => !o)}
+            className={cn(
+              'flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors',
+              moreOpen || MORE_ITEMS.some(i => pathname.startsWith(i.href))
+                ? 'text-primary'
+                : 'text-muted-foreground'
+            )}
+          >
+            {moreOpen ? <X className="h-5 w-5" /> : <MoreHorizontal className="h-5 w-5" />}
+            <span className="text-[10px] font-medium">Mais</span>
+          </button>
         </div>
       </nav>
+
+      {/* Menu "Mais" expandido */}
+      {moreOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40 md:hidden"
+            onClick={() => setMoreOpen(false)}
+          />
+          <div className="fixed bottom-16 right-0 left-0 z-50 md:hidden bg-card border-t border-border px-4 py-3 space-y-1 shadow-lg">
+            {MORE_ITEMS.map(({ href, label, icon: Icon }) => {
+              const active = pathname === href || pathname.startsWith(href + '/')
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={() => setMoreOpen(false)}
+                  className={cn(
+                    'flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-sm font-medium',
+                    active ? 'bg-brand-muted text-primary' : 'text-foreground hover:bg-secondary'
+                  )}
+                >
+                  <Icon className="h-5 w-5" />
+                  {label}
+                </Link>
+              )
+            })}
+          </div>
+        </>
+      )}
 
       {/* Desktop: top nav */}
       <nav className="hidden md:flex fixed top-0 left-0 right-0 z-50 bg-card border-b border-border h-14">

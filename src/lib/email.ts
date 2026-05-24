@@ -1,7 +1,7 @@
 import { Resend } from 'resend'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
-const FROM = 'BetCopiloto <onboarding@resend.dev>'
+const FROM = 'BetCopiloto <noreply@betcopiloto.com.br>'
 
 export async function sendWelcomeEmail(to: string, name: string) {
   return resend.emails.send({

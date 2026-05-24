@@ -3,6 +3,15 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getFixturesByDate, FEATURED_LEAGUES } from '@/lib/api-football'
+import crypto from 'crypto'
+
+function timingSafeEqual(a: string, b: string): boolean {
+  try {
+    return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b))
+  } catch {
+    return false
+  }
+}
 
 function getDateBRT(): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -14,7 +23,7 @@ function getDateBRT(): string {
 export async function POST(request: NextRequest) {
   // Autenticação: aceita cron secret ou usuário logado
   const authHeader = request.headers.get('authorization')
-  const isCron = authHeader === `Bearer ${process.env.CRON_SECRET}`
+  const isCron = !!process.env.CRON_SECRET && !!authHeader && timingSafeEqual(authHeader, `Bearer ${process.env.CRON_SECRET}`)
 
   if (!isCron) {
     const supabase = await createClient()
