@@ -34,7 +34,9 @@ export async function getOrCreateCustomer(email: string, name: string, userId: s
   const search = await fetch(`${ASAAS_BASE}/customers?email=${encodeURIComponent(email)}`, {
     headers: headers(),
   })
-  const searchData = await search.json()
+  const searchText = await search.text()
+  if (!search.ok) throw new Error(`Asaas customers search error ${search.status}: ${searchText}`)
+  const searchData = searchText ? JSON.parse(searchText) : { data: [] }
   if (searchData.data?.length > 0) {
     const existing = searchData.data[0]
     // Atualiza CPF se ainda não tem
