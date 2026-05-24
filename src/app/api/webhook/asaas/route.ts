@@ -2,16 +2,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendPaymentReceiptEmail } from '@/lib/email'
 import { asaasPost } from '../../../../lib/asaas'
+import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
 
 const PLAN_PRICE = 49.90
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b))
+}
 
 export async function POST(request: NextRequest) {
-  // Verificar token de autenticação do Asaas
-  const token = request.headers.get('asaas-access-token')
   const expectedToken = process.env.ASAAS_WEBHOOK_TOKEN
-  if (!expectedToken || token !== expectedToken) {
+  const token = request.headers.get('asaas-access-token') ?? ''
+  if (!expectedToken || !timingSafeEqual(token, expectedToken)) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
 
@@ -23,7 +29,7 @@ export async function POST(request: NextRequest) {
   const admin = createAdminClient()
   const userId: string = payment.externalReference
 
-  if (!userId) return NextResponse.json({ ok: true })
+  if (!userId || !UUID_REGEX.test(userId)) return NextResponse.json({ ok: true })
 
   // Pagamento confirmado/recebido → ativar Pro
   if (event === 'PAYMENT_RECEIVED' || event === 'PAYMENT_CONFIRMED') {

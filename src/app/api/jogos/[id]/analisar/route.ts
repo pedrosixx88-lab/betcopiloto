@@ -435,7 +435,7 @@ Se houver dados de escanteios ou cartões, adicione esses mercados no array. A o
       bttsMarket.reasoning = 'Corrigido automaticamente: Under 2.5 + Ambas marcam Sim é restritivo demais (só 1x1).'
     }
   } catch (err) {
-    console.error('Erro análise IA:', err)
+    console.error('[analisar] erro:', err instanceof Error ? err.message : String(err))
     return NextResponse.json({ error: 'Erro ao gerar análise' }, { status: 500 })
   }
 

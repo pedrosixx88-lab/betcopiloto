@@ -161,7 +161,7 @@ Regras:
 
     return NextResponse.json({ success: true, ticket })
   } catch (err) {
-    console.error('[bilhete/montar] erro:', err)
+    console.error('[bilhete/montar] erro:', err instanceof Error ? err.message : String(err))
     return NextResponse.json({ error: 'Erro ao montar bilhete. Tente novamente.' }, { status: 500 })
   }
 }

@@ -8,16 +8,12 @@ export const dynamic = 'force-dynamic'
 function decryptPixKey(value: string): string {
   if (!value.startsWith('enc:')) return value
   const secret = process.env.PIX_ENCRYPTION_KEY
-  if (!secret) return value
-  try {
-    const [, ivHex, encHex] = value.split(':')
-    const iv = Buffer.from(ivHex, 'hex')
-    const key = crypto.createHash('sha256').update(secret).digest()
-    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv)
-    return Buffer.concat([decipher.update(Buffer.from(encHex, 'hex')), decipher.final()]).toString('utf8')
-  } catch {
-    return value
-  }
+  if (!secret) throw new Error('PIX_ENCRYPTION_KEY não configurada')
+  const [, ivHex, encHex] = value.split(':')
+  const iv = Buffer.from(ivHex, 'hex')
+  const key = crypto.createHash('sha256').update(secret).digest()
+  const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv)
+  return Buffer.concat([decipher.update(Buffer.from(encHex, 'hex')), decipher.final()]).toString('utf8')
 }
 
 const ASAAS_BASE = 'https://api.asaas.com/v3'

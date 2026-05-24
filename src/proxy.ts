@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import crypto from 'crypto'
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -33,9 +34,12 @@ export async function proxy(request: NextRequest) {
 
   // Rotas de cron e briefing com secret não precisam de sessão
   const cronSecret = process.env.CRON_SECRET
-  const authHeader = request.headers.get('authorization')
+  const authHeader = request.headers.get('authorization') ?? ''
   const isCronRoute = pathname.startsWith('/api/cron/') || pathname.startsWith('/api/briefing/')
-  const hasCronSecret = cronSecret && authHeader === `Bearer ${cronSecret}`
+  const expectedBearer = `Bearer ${cronSecret}`
+  const hasCronSecret = cronSecret &&
+    authHeader.length === expectedBearer.length &&
+    crypto.timingSafeEqual(Buffer.from(authHeader), Buffer.from(expectedBearer))
   if (isCronRoute && hasCronSecret) return NextResponse.next()
 
   if (!user && !isPublic) {

@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 
 function encryptPixKey(value: string): string {
   const secret = process.env.PIX_ENCRYPTION_KEY
-  if (!secret) return value // fallback sem criptografia se chave não configurada
+  if (!secret) throw new Error('PIX_ENCRYPTION_KEY não configurada')
   const iv = crypto.randomBytes(16)
   const key = crypto.createHash('sha256').update(secret).digest()
   const cipher = crypto.createCipheriv('aes-256-cbc', key, iv)

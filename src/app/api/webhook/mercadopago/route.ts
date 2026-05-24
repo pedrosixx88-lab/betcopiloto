@@ -9,23 +9,29 @@ const MP_BASE = 'https://api.mercadopago.com'
 const PLAN_PRICE = 29.90
 const AFFILIATE_COMMISSION_PCT = 0.30
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 function verifySignature(request: NextRequest, rawBody: string): boolean {
   const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET
-  if (!secret) return false // bloquear sempre se secret não configurado
+  if (!secret) return false
 
   const xSignature = request.headers.get('x-signature') ?? ''
   const xRequestId = request.headers.get('x-request-id') ?? ''
   const urlParams = request.nextUrl.searchParams
   const dataId = urlParams.get('data.id') ?? ''
 
-  // MP assina: "id:{dataId};request-id:{xRequestId};ts:{ts};"
   const parts = xSignature.split(',')
   const ts = parts.find(p => p.startsWith('ts='))?.split('=')[1] ?? ''
   const v1 = parts.find(p => p.startsWith('v1='))?.split('=')[1] ?? ''
 
   const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`
   const hash = crypto.createHmac('sha256', secret).update(manifest).digest('hex')
-  return hash === v1
+
+  try {
+    return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(v1))
+  } catch {
+    return false
+  }
 }
 
 async function fetchPreapproval(preapprovalId: string) {
@@ -59,7 +65,7 @@ export async function POST(request: NextRequest) {
   if (!preapproval) return NextResponse.json({ error: 'Preapproval não encontrado' }, { status: 404 })
 
   const userId: string = preapproval.external_reference
-  if (!userId) return NextResponse.json({ error: 'external_reference ausente' }, { status: 400 })
+  if (!userId || !UUID_REGEX.test(userId)) return NextResponse.json({ error: 'external_reference inválido' }, { status: 400 })
 
   const admin = createAdminClient()
   const status: string = preapproval.status // authorized | paused | cancelled | pending
