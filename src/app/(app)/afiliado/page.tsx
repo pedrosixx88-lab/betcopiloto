@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import { Users, DollarSign, TrendingUp, Copy } from 'lucide-react'
+import { decryptPixKey } from '@/lib/pix-crypto'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -121,7 +122,7 @@ export default async function AfiliadoPage() {
         <CardContent className="py-4 px-4">
           <SaqueForm
             pendingPayout={pendingPayout}
-            pixKey={affiliate?.pix_key ?? null}
+            pixKey={affiliate?.pix_key ? decryptPixKey(affiliate.pix_key) : null}
             pixKeyType={affiliate?.pix_key_type ?? null}
             activeReferrals={affiliate?.active_referrals ?? 0}
           />

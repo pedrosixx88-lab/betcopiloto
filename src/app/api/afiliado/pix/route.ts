@@ -1,19 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import crypto from 'crypto'
+import { encryptPixKey } from '@/lib/pix-crypto'
 
 export const dynamic = 'force-dynamic'
-
-function encryptPixKey(value: string): string {
-  const secret = process.env.PIX_ENCRYPTION_KEY
-  if (!secret) throw new Error('PIX_ENCRYPTION_KEY não configurada')
-  const iv = crypto.randomBytes(16)
-  const key = crypto.createHash('sha256').update(secret).digest()
-  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv)
-  const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()])
-  return `enc:${iv.toString('hex')}:${encrypted.toString('hex')}`
-}
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
