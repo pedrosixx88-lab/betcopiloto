@@ -1,10 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { LayoutDashboard, BarChart3, Trophy, Ticket, Crown, Users, MoreHorizontal, X } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { LayoutDashboard, BarChart3, Trophy, Ticket, Crown, Users, MoreHorizontal, X, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Início', icon: LayoutDashboard },
@@ -25,7 +26,14 @@ const DESKTOP_EXTRA = [
 
 export default function BottomNav() {
   const pathname = usePathname()
+  const router = useRouter()
   const [moreOpen, setMoreOpen] = useState(false)
+
+  async function handleSignOut() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
 
   return (
     <>
@@ -91,6 +99,13 @@ export default function BottomNav() {
                 </Link>
               )
             })}
+            <button
+              onClick={handleSignOut}
+              className="flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-sm font-medium text-destructive hover:bg-destructive/10 w-full"
+            >
+              <LogOut className="h-5 w-5" />
+              Sair
+            </button>
           </div>
         </>
       )}
@@ -118,6 +133,13 @@ export default function BottomNav() {
                 </Link>
               )
             })}
+            <button
+              onClick={handleSignOut}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 ml-2"
+            >
+              <LogOut className="h-4 w-4" />
+              Sair
+            </button>
           </div>
         </div>
       </nav>
