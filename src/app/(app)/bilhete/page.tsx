@@ -39,7 +39,7 @@ export default async function BilhetePage() {
               </p>
             </div>
             <Link href="/planos" className={cn(buttonVariants({ size: 'sm' }), 'gap-1.5')}>
-              <Crown className="h-4 w-4" /> Assinar Pro — R$ 29/mês
+              <Crown className="h-4 w-4" /> Assinar Pro — R$ 49/mês
             </Link>
           </CardContent>
         </Card>

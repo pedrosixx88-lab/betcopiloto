@@ -122,7 +122,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ url: payment.invoiceUrl })
   } catch (err) {
-    console.error('[checkout/criar] erro ao criar cobrança')
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[checkout/criar] erro ao criar cobrança:', msg)
     return NextResponse.json({ error: 'Erro ao criar assinatura. Tente novamente.' }, { status: 500 })
   }
 }

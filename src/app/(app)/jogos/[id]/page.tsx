@@ -208,7 +208,7 @@ export default function JogoPage() {
                 </p>
               </div>
               <Link href="/planos" className="inline-flex items-center gap-1.5 text-sm font-medium bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:opacity-90 transition-opacity">
-                <Crown className="h-4 w-4" /> Assinar Pro — R$ 29/mês
+                <Crown className="h-4 w-4" /> Assinar Pro — R$ 49/mês
               </Link>
             </CardContent>
           </Card>
