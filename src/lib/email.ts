@@ -64,6 +64,51 @@ export async function sendWelcomeEmail(to: string, name: string) {
   })
 }
 
+export async function sendPasswordResetEmail(to: string, resetLink: string) {
+  return resend.emails.send({
+    from: FROM,
+    to,
+    subject: 'Redefinir senha — BetCopiloto',
+    html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0f0f0f;font-family:'Helvetica Neue',Arial,sans-serif;color:#ffffff">
+  <div style="max-width:520px;margin:0 auto;padding:40px 24px">
+
+    <div style="margin-bottom:32px">
+      <div style="display:inline-flex;align-items:center;gap:8px">
+        <div style="width:32px;height:32px;background:#22c55e;border-radius:8px;display:flex;align-items:center;justify-content:center">
+          <span style="color:#000;font-weight:900;font-size:16px">↗</span>
+        </div>
+        <span style="font-weight:700;font-size:18px;color:#ffffff">BetCopiloto</span>
+      </div>
+    </div>
+
+    <h1 style="font-size:24px;font-weight:800;margin:0 0 12px">Redefinir senha</h1>
+    <p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:0 0 32px">
+      Recebemos uma solicitação para redefinir a senha da sua conta. Clique no botão abaixo para criar uma nova senha.
+    </p>
+
+    <a href="${resetLink}"
+       style="display:block;background:#22c55e;color:#000000;text-align:center;padding:14px 24px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none;margin-bottom:24px">
+      Redefinir minha senha →
+    </a>
+
+    <p style="color:#71717a;font-size:13px;line-height:1.6;margin:0 0 32px">
+      Se você não solicitou a redefinição de senha, ignore este e-mail. Sua senha não será alterada.
+      Este link expira em 1 hora.
+    </p>
+
+    <p style="color:#52525b;font-size:12px;text-align:center;line-height:1.5;margin:0">
+      BetCopiloto · Aposte com responsabilidade +18
+    </p>
+  </div>
+</body>
+</html>`,
+  })
+}
+
 export async function sendPaymentReceiptEmail(to: string, name: string) {
   const now = new Date()
   const nextMonth = new Date(now)

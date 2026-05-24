@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,19 +17,18 @@ export default function ResetPasswordPage() {
     e.preventDefault()
     setLoading(true)
 
-    const supabase = createClient()
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/update-password`,
-    })
-
-    if (error) {
+    try {
+      await fetch('/api/email/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      setSent(true)
+    } catch {
       toast.error('Erro ao enviar e-mail. Tente novamente.')
+    } finally {
       setLoading(false)
-      return
     }
-
-    setSent(true)
-    setLoading(false)
   }
 
   return (
