@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendPaymentReceiptEmail } from '@/lib/email'
-import { asaasPost, asaasGet } from '@/lib/asaas'
+import { asaasPost } from '@/lib/asaas'
 
 export const dynamic = 'force-dynamic'
 
