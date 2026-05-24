@@ -31,7 +31,8 @@ export function BancaCard({ initialValue }: { initialValue: number }) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setSaving(false); return }
 
-    const { error } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
       .from('profiles')
       .update({ current_bankroll: parsed })
       .eq('id', user.id)
