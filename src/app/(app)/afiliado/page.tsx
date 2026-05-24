@@ -60,6 +60,15 @@ export default async function AfiliadoPage() {
   const totalEarned = affiliate?.total_earned ?? 0
   const pendingPayout = affiliate?.pending_payout ?? 0
 
+  let decryptedPixKey: string | null = null
+  if (affiliate?.pix_key) {
+    try {
+      decryptedPixKey = decryptPixKey(affiliate.pix_key)
+    } catch {
+      decryptedPixKey = null
+    }
+  }
+
   return (
     <div className="p-4 md:p-8 max-w-2xl mx-auto space-y-5 pb-24">
       <div className="pt-2">
@@ -122,7 +131,7 @@ export default async function AfiliadoPage() {
         <CardContent className="py-4 px-4">
           <SaqueForm
             pendingPayout={pendingPayout}
-            pixKey={affiliate?.pix_key ? decryptPixKey(affiliate.pix_key) : null}
+            pixKey={decryptedPixKey}
             pixKeyType={affiliate?.pix_key_type ?? null}
             activeReferrals={affiliate?.active_referrals ?? 0}
           />
