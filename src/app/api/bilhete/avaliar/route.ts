@@ -165,7 +165,12 @@ market deve ser: match_winner | over_under | both_teams_score | handicap | corne
         const allStandings: any[] = []
         standingsRaw.forEach((group: any) => {
           if (Array.isArray(group)) allStandings.push(...group)
-          else if (group?.standings) group.standings.forEach((s: any[]) => allStandings.push(...s))
+          else if (group?.league?.standings) {
+            // Estrutura real da API: { league: { standings: [[...times...]] } }
+            group.league.standings.forEach((s: any[]) => allStandings.push(...s))
+          } else if (group?.standings) {
+            group.standings.forEach((s: any[]) => allStandings.push(...s))
+          }
         })
         const findStanding = (teamId: number) => allStandings.find((s: any) => s.team?.id === teamId)
         const homeStanding = findStanding(homeId)

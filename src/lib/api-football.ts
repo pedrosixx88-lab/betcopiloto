@@ -145,15 +145,24 @@ export async function getFixtureEvents(fixtureId: number): Promise<any[]> {
 }
 
 export async function searchFixture(homeTeam: string, awayTeam: string, date: string): Promise<Fixture | null> {
-  const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+  // Remove acentos, hifens, underscores e normaliza espaços
+  const normalize = (s: string) => s.toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[-_]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
   const home = normalize(homeTeam)
   const away = normalize(awayTeam)
 
   const matchTeams = (f: Fixture) => {
     const fHome = normalize(f.teams.home.name)
     const fAway = normalize(f.teams.away.name)
-    return (fHome.includes(home) || home.includes(fHome)) &&
-           (fAway.includes(away) || away.includes(fAway))
+    // Correspondência parcial: um deve conter o outro (para lidar com nomes abreviados vs completos)
+    const homeMatch = fHome.includes(home) || home.includes(fHome) ||
+      home.split(' ').filter(w => w.length > 3).some(w => fHome.includes(w))
+    const awayMatch = fAway.includes(away) || away.includes(fAway) ||
+      away.split(' ').filter(w => w.length > 3).some(w => fAway.includes(w))
+    return homeMatch && awayMatch
   }
 
   // Tenta a data exata primeiro
