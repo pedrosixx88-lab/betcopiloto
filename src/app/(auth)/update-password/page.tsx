@@ -20,43 +20,37 @@ export default function UpdatePasswordPage() {
   useEffect(() => {
     const supabase = createClient()
 
-    // O Supabase processa o hash automaticamente e dispara o evento
+    // Listener para evento PASSWORD_RECOVERY — disparado quando o Supabase
+    // processa automaticamente o hash #access_token=...&type=recovery da URL
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY' && session) {
-        setReady(true)
-      } else if (event === 'SIGNED_IN' && session) {
+      if ((event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') && session) {
         setReady(true)
       }
     })
 
-    // Fallback: verifica sessão já existente
+    // Se já tem sessão ativa (veio via redirect server-side)
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setReady(true)
     })
 
-    // Fallback final: se em 4s ainda não tiver ready, marca como inválido
+    return () => subscription.unsubscribe()
+  }, [])
+
+  // Timeout de 8 segundos para mostrar "link expirado"
+  useEffect(() => {
+    if (ready) return
     const timer = setTimeout(async () => {
+      const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) setInvalid(true)
-      else setReady(true)
-    }, 4000)
-
-    return () => {
-      subscription.unsubscribe()
-      clearTimeout(timer)
-    }
-  }, [])
+    }, 8000)
+    return () => clearTimeout(timer)
+  }, [ready])
 
   async function handleUpdate(e: React.FormEvent) {
     e.preventDefault()
-    if (password !== confirm) {
-      toast.error('As senhas não coincidem')
-      return
-    }
-    if (password.length < 6) {
-      toast.error('A senha deve ter pelo menos 6 caracteres')
-      return
-    }
+    if (password !== confirm) { toast.error('As senhas não coincidem'); return }
+    if (password.length < 6) { toast.error('A senha deve ter pelo menos 6 caracteres'); return }
     setLoading(true)
 
     const supabase = createClient()
@@ -79,10 +73,10 @@ export default function UpdatePasswordPage() {
         <div className="w-full max-w-sm space-y-6 text-center">
           <div className="flex items-center justify-center gap-2">
             <TrendingUp className="h-7 w-7 text-primary" />
-            <span className="text-xl font-bold tracking-tight">BetCopiloto</span>
+            <span className="text-xl font-bold">BetCopiloto</span>
           </div>
           <h1 className="text-2xl font-bold">Link expirado</h1>
-          <p className="text-muted-foreground text-sm">Este link de recuperação é inválido ou já expirou.</p>
+          <p className="text-muted-foreground text-sm">Este link é inválido ou já expirou.</p>
           <a href="/reset-password" className="inline-block w-full bg-primary text-primary-foreground text-center py-3 rounded-lg font-medium text-sm">
             Solicitar novo link
           </a>
@@ -112,27 +106,13 @@ export default function UpdatePasswordPage() {
           <form onSubmit={handleUpdate} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="password">Nova senha</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-              />
+              <Input id="password" type="password" placeholder="••••••••" value={password}
+                onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirm">Confirmar senha</Label>
-              <Input
-                id="confirm"
-                type="password"
-                placeholder="••••••••"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                required
-                autoComplete="new-password"
-              />
+              <Input id="confirm" type="password" placeholder="••••••••" value={confirm}
+                onChange={(e) => setConfirm(e.target.value)} required autoComplete="new-password" />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar nova senha'}
