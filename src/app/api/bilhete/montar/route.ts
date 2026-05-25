@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
+import { rateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 
 const Schema = z.object({
@@ -12,6 +13,11 @@ export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+
+  // 10 bilhetes por usuário a cada 10 minutos
+  if (!rateLimit(`bilhete:${user.id}`, 10, 10 * 60 * 1000)) {
+    return NextResponse.json({ error: 'Muitas requisições. Aguarde alguns minutos.' }, { status: 429 })
+  }
 
   // Gate: montador de bilhete é exclusivo do plano Pro
   const { data: profile } = await supabase

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
+import { rateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 
 const BetExtractionSchema = z.object({
@@ -30,6 +31,11 @@ export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+
+  // 5 extrações por usuário a cada 5 minutos
+  if (!rateLimit(`extrair:${user.id}`, 5, 5 * 60 * 1000)) {
+    return NextResponse.json({ error: 'Muitas requisições. Aguarde alguns minutos.' }, { status: 429 })
+  }
 
   const formData = await request.formData()
   const file = formData.get('screenshot') as File | null

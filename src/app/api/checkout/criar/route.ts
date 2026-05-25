@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getOrCreateCustomer, asaasPost } from '@/lib/asaas'
+import { rateLimit } from '@/lib/rate-limit'
 
 function isValidCPF(cpf: string): boolean {
   if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false
@@ -45,6 +46,11 @@ export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+
+  // 3 tentativas de checkout por usuário a cada hora
+  if (!rateLimit(`checkout:${user.id}`, 3, 60 * 60 * 1000)) {
+    return NextResponse.json({ error: 'Muitas tentativas. Tente novamente em 1 hora.' }, { status: 429 })
+  }
 
   const { data: profile } = await supabase
     .from('profiles')

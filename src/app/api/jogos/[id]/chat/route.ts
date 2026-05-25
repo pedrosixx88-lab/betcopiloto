@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
+import { rateLimit } from '@/lib/rate-limit'
 
 export async function POST(
   request: NextRequest,
@@ -9,6 +10,11 @@ export async function POST(
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+
+  // 20 mensagens por usuário a cada 5 minutos
+  if (!rateLimit(`chat:${user.id}`, 20, 5 * 60 * 1000)) {
+    return NextResponse.json({ error: 'Muitas mensagens. Aguarde alguns minutos.' }, { status: 429 })
+  }
 
   const { id } = await params
   const fixtureId = parseInt(id)

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { rateLimit } from '@/lib/rate-limit'
 import {
   getFixtureById, getH2H, getLastMatches, getStandings,
   getTeamSeasonStats, getFixtureOdds, getFixtureStats,
@@ -186,6 +187,11 @@ export async function GET(
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+
+  // 30 análises por usuário a cada 10 minutos (cache reduz chamadas reais à IA)
+  if (!rateLimit(`analisar:${user.id}`, 30, 10 * 60 * 1000)) {
+    return NextResponse.json({ error: 'Muitas requisições. Aguarde alguns minutos.' }, { status: 429 })
+  }
 
   const { id } = await params
   const fixtureId = parseInt(id)
