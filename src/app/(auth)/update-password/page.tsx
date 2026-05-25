@@ -20,32 +20,27 @@ export default function UpdatePasswordPage() {
   useEffect(() => {
     const supabase = createClient()
 
-    // Tenta pegar sessão existente (caso já esteja logado via callback)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setReady(true)
+    // Primeiro tenta processar o hash (token vem no fragment da URL)
+    const hash = window.location.hash
+    if (hash && hash.includes('access_token')) {
+      const params = new URLSearchParams(hash.replace('#', ''))
+      const accessToken = params.get('access_token')
+      const refreshToken = params.get('refresh_token')
+
+      if (accessToken && refreshToken) {
+        supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+          .then(({ error }) => {
+            if (error) setError(true)
+            else setReady(true)
+          })
         return
       }
+    }
 
-      // Processa o hash da URL manualmente
-      const hash = window.location.hash
-      if (hash && hash.includes('access_token')) {
-        const params = new URLSearchParams(hash.replace('#', ''))
-        const accessToken = params.get('access_token')
-        const refreshToken = params.get('refresh_token')
-
-        if (accessToken && refreshToken) {
-          supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
-            .then(({ error }) => {
-              if (error) setError(true)
-              else setReady(true)
-            })
-          return
-        }
-      }
-
-      // Sem token e sem sessão
-      setError(true)
+    // Sem hash — verifica se já tem sessão ativa (veio via callback server-side)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) setReady(true)
+      else setError(true)
     })
   }, [])
 
