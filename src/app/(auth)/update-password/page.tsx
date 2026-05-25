@@ -9,32 +9,46 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { TrendingUp, Loader2 } from 'lucide-react'
 
+type Status = 'loading' | 'ready' | 'expired'
+
 export default function UpdatePasswordPage() {
   const router = useRouter()
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
-  const [ready, setReady] = useState(false)
+  const [status, setStatus] = useState<Status>('loading')
 
   useEffect(() => {
-    const supabase = createClient()
+    async function init() {
+      const supabase = createClient()
 
-    // Listener para evento PASSWORD_RECOVERY — disparado quando o Supabase
-    // processa automaticamente o hash #access_token=...&type=recovery da URL
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if ((event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') && session) {
-        setReady(true)
+      // 1. Verifica se já tem sessão ativa
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) { setStatus('ready'); return }
+
+      // 2. Tenta extrair token do hash da URL
+      const hash = window.location.hash
+      if (hash) {
+        const params = new URLSearchParams(hash.slice(1))
+        const accessToken = params.get('access_token')
+        const refreshToken = params.get('refresh_token')
+        const type = params.get('type')
+
+        if (accessToken && refreshToken && type === 'recovery') {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          })
+          if (!error) { setStatus('ready'); return }
+        }
       }
-    })
 
-    // Se já tem sessão ativa (veio via redirect server-side)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setReady(true)
-    })
+      // 3. Sem sessão e sem token válido
+      setStatus('expired')
+    }
 
-    return () => subscription.unsubscribe()
+    init()
   }, [])
-
 
   async function handleUpdate(e: React.FormEvent) {
     e.preventDefault()
@@ -56,6 +70,24 @@ export default function UpdatePasswordPage() {
     router.push('/login')
   }
 
+  if (status === 'expired') {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="w-full max-w-sm space-y-6 text-center">
+          <div className="flex items-center justify-center gap-2">
+            <TrendingUp className="h-7 w-7 text-primary" />
+            <span className="text-xl font-bold">BetCopiloto</span>
+          </div>
+          <h1 className="text-2xl font-bold">Link expirado</h1>
+          <p className="text-muted-foreground text-sm">Este link é inválido ou já expirou.</p>
+          <a href="/reset-password" className="inline-block w-full bg-primary text-primary-foreground text-center py-3 rounded-lg font-semibold text-sm">
+            Solicitar novo link
+          </a>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-8">
@@ -68,7 +100,7 @@ export default function UpdatePasswordPage() {
           <p className="text-muted-foreground text-sm">Digite sua nova senha abaixo.</p>
         </div>
 
-        {!ready ? (
+        {status === 'loading' ? (
           <div className="text-center text-muted-foreground text-sm flex items-center justify-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />
             Verificando link...
