@@ -32,6 +32,9 @@ export async function proxy(request: NextRequest) {
   // Webhook do Mercado Pago — sem autenticação
   if (pathname.startsWith('/api/webhook/')) return NextResponse.next()
 
+  // E-mail de recuperação de senha — sem autenticação
+  if (pathname === '/api/email/reset-password') return NextResponse.next()
+
   // Rotas de cron e briefing com secret não precisam de sessão
   const cronSecret = process.env.CRON_SECRET
   const authHeader = request.headers.get('authorization') ?? ''
