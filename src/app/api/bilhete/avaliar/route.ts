@@ -93,35 +93,42 @@ market deve ser: match_winner | over_under | both_teams_score | handicap | corne
   if (!ticketData.legs?.length) return NextResponse.json({ error: 'Nenhum jogo encontrado no bilhete.' }, { status: 400 })
 
   const bankroll = profile?.current_bankroll ?? 0
-  const season = new Date().getFullYear()
 
   // PASSO 2 — Buscar dados reais para cada jogo em paralelo
   const legsWithData = await Promise.all(
     ticketData.legs.map(async (leg) => {
       try {
         const fixture = await searchFixture(leg.home_team, leg.away_team, leg.match_date)
-        if (!fixture) return { leg, data: null, reason: 'Jogo não encontrado na API' }
+        if (!fixture) {
+          console.log(`[avaliar] Fixture NOT found: ${leg.home_team} vs ${leg.away_team} @ ${leg.match_date}`)
+          return { leg, data: null, reason: 'Jogo não encontrado na API' }
+        }
 
         const fid = fixture.fixture.id
         const homeId = fixture.teams.home.id
         const awayId = fixture.teams.away.id
         const leagueId = fixture.league.id
+        // API-Football usa o ANO DE INÍCIO da temporada (ex: temporada 2025/26 = 2025)
+        const fixtureSeason = fixture.league.season ?? new Date().getFullYear()
+
+        console.log(`[avaliar] Fixture found: ${fixture.teams.home.name} vs ${fixture.teams.away.name} | id=${fid} | league=${fixture.league.name} | season=${fixtureSeason}`)
 
         // Busca paralela de TODOS os dados disponíveis
-        const [predictions, lineups, injuries, fixtureStats, homeStandings, awayStandings] = await Promise.allSettled([
+        const [predictions, lineups, injuries, fixtureStats, standingsData] = await Promise.allSettled([
           getFixturePredictions(fid),
           getFixtureLineups(fid),
           getFixtureInjuries(fid),
           getFixtureStats(fid),
-          getStandings(leagueId, season),
-          getStandings(leagueId, season), // mesmo endpoint — compartilhado abaixo
+          getStandings(leagueId, fixtureSeason),
         ])
 
         const pred = predictions.status === 'fulfilled' ? predictions.value : null
         const lu = lineups.status === 'fulfilled' ? lineups.value : []
         const inj = injuries.status === 'fulfilled' ? injuries.value : []
         const stats = fixtureStats.status === 'fulfilled' ? fixtureStats.value : []
-        const standingsRaw = homeStandings.status === 'fulfilled' ? homeStandings.value : []
+        const standingsRaw = standingsData.status === 'fulfilled' ? standingsData.value : []
+
+        console.log(`[avaliar] ${fixture.teams.home.name} vs ${fixture.teams.away.name}: pred=${!!pred} lineups=${lu.length} injuries=${inj.length} standings=${standingsRaw.length}`)
 
         // Encontrar posição na tabela dos dois times
         const allStandings: any[] = []

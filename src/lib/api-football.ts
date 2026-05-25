@@ -16,7 +16,7 @@ export interface Fixture {
     date: string
     status: { short: string; long: string; elapsed: number | null }
   }
-  league: { id: number; name: string; country: string; logo: string; flag: string | null; round: string }
+  league: { id: number; name: string; country: string; logo: string; flag: string | null; round: string; season: number }
   teams: {
     home: { id: number; name: string; logo: string }
     away: { id: number; name: string; logo: string }
@@ -145,17 +145,36 @@ export async function getFixtureEvents(fixtureId: number): Promise<any[]> {
 }
 
 export async function searchFixture(homeTeam: string, awayTeam: string, date: string): Promise<Fixture | null> {
-  const fixtures = await getFixturesByDate(date)
   const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
   const home = normalize(homeTeam)
   const away = normalize(awayTeam)
 
-  return fixtures.find(f => {
+  const matchTeams = (f: Fixture) => {
     const fHome = normalize(f.teams.home.name)
     const fAway = normalize(f.teams.away.name)
     return (fHome.includes(home) || home.includes(fHome)) &&
            (fAway.includes(away) || away.includes(fAway))
-  }) ?? null
+  }
+
+  // Tenta a data exata primeiro
+  const fixtures = await getFixturesByDate(date)
+  const found = fixtures.find(matchTeams)
+  if (found) return found
+
+  // Fallback: tenta dia anterior e dia seguinte (fuso horário pode causar diferença de 1 dia)
+  const d = new Date(date)
+  const prev = new Date(d); prev.setDate(prev.getDate() - 1)
+  const next = new Date(d); next.setDate(next.getDate() + 1)
+  const fmt = (dt: Date) => dt.toISOString().split('T')[0]
+
+  const [prevFixtures, nextFixtures] = await Promise.all([
+    getFixturesByDate(fmt(prev)),
+    getFixturesByDate(fmt(next)),
+  ])
+
+  console.log(`[searchFixture] ${homeTeam} vs ${awayTeam} @ ${date}: exactDate=${fixtures.length} fixtures, prev=${prevFixtures.length}, next=${nextFixtures.length}`)
+
+  return prevFixtures.find(matchTeams) ?? nextFixtures.find(matchTeams) ?? null
 }
 
 function norm(s: string): string {
