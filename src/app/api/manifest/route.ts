@@ -1,0 +1,30 @@
+import { NextResponse } from 'next/server'
+
+export async function GET() {
+  const manifest = {
+    name: 'BetCopiloto',
+    short_name: 'BetCopiloto',
+    description: 'Seu segundo cérebro nas apostas esportivas. Registre apostas com um print, acompanhe ROI e win rate com IA.',
+    start_url: '/',
+    scope: '/',
+    display: 'standalone',
+    background_color: '#09090b',
+    theme_color: '#09090b',
+    orientation: 'portrait',
+    lang: 'pt-BR',
+    categories: ['sports', 'finance'],
+    icons: [
+      { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+      { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+    ],
+  }
+
+  return NextResponse.json(manifest, {
+    headers: {
+      'Content-Type': 'application/manifest+json',
+      'Cache-Control': 'public, max-age=0, must-revalidate',
+    },
+  })
+}
