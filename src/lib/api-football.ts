@@ -149,23 +149,72 @@ export async function getFixtureEvents(fixtureId: number): Promise<any[]> {
 }
 
 export async function searchFixture(homeTeam: string, awayTeam: string, date: string): Promise<Fixture | null> {
-  // Remove acentos, hifens, underscores e normaliza espaços
   const normalize = (s: string) => s.toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/[-_]/g, ' ')
+    .replace(/[-_\.]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-  const home = normalize(homeTeam)
-  const away = normalize(awayTeam)
+
+  // Aliases manuais para nomes que a IA extrai diferente da API
+  const ALIASES: Record<string, string[]> = {
+    'ldu quito':      ['ldu', 'liga de quito', 'liga deportiva universitaria', 'ldu de quito'],
+    'always ready':   ['always ready'],
+    'bolivar':        ['bolivar', 'club bolivar'],
+    'the strongest':  ['the strongest', 'strongest'],
+    'independiente':  ['independiente', 'independiente de avellaneda'],
+    'racing club':    ['racing club', 'racing'],
+    'river plate':    ['river plate', 'river'],
+    'boca juniors':   ['boca juniors', 'boca'],
+    'flamengo':       ['flamengo', 'cr flamengo'],
+    'atletico mg':    ['atletico mg', 'atletico mineiro', 'atletico-mg', 'galo'],
+    'sao paulo':      ['sao paulo', 'spfc'],
+    'internacional':  ['internacional', 'inter', 'sc internacional'],
+    'gremio':         ['gremio'],
+    'palmeiras':      ['palmeiras', 'sociedade esportiva palmeiras'],
+    'santos':         ['santos', 'santos fc'],
+    'corinthians':    ['corinthians', 'sport club corinthians'],
+  }
+
+  const resolveAlias = (name: string): string => {
+    const n = normalize(name)
+    for (const [canonical, aliases] of Object.entries(ALIASES)) {
+      if (aliases.some(a => n.includes(a) || a.includes(n))) return canonical
+    }
+    return n
+  }
+
+  const home = resolveAlias(homeTeam)
+  const away = resolveAlias(homeTeam) === home ? normalize(homeTeam) : home
+  const homeNorm = normalize(homeTeam)
+  const awayNorm = normalize(awayTeam)
+  const homeAlias = resolveAlias(homeTeam)
+  const awayAlias = resolveAlias(awayTeam)
+
+  const teamMatch = (inputName: string, fixtureTeamName: string): boolean => {
+    const inp = normalize(inputName)
+    const fix = normalize(fixtureTeamName)
+    const inpAlias = resolveAlias(inputName)
+    const fixAlias = resolveAlias(fixtureTeamName)
+
+    // Match exato ou alias
+    if (inp === fix || inpAlias === fixAlias) return true
+
+    // Um contém o outro
+    if (fix.includes(inp) || inp.includes(fix)) return true
+    if (fix.includes(inpAlias) || inpAlias.includes(fix)) return true
+
+    // Match por tokens — qualquer palavra com 3+ letras que bate
+    const inpTokens = inp.split(' ').filter(w => w.length >= 3)
+    const fixTokens = fix.split(' ').filter(w => w.length >= 3)
+    const tokenHits = inpTokens.filter(w => fixTokens.some(fw => fw.includes(w) || w.includes(fw)))
+    if (tokenHits.length >= 1 && inpTokens.length > 0) return true
+
+    return false
+  }
 
   const matchTeams = (f: Fixture) => {
-    const fHome = normalize(f.teams.home.name)
-    const fAway = normalize(f.teams.away.name)
-    // Correspondência parcial: um deve conter o outro (para lidar com nomes abreviados vs completos)
-    const homeMatch = fHome.includes(home) || home.includes(fHome) ||
-      home.split(' ').filter(w => w.length > 3).some(w => fHome.includes(w))
-    const awayMatch = fAway.includes(away) || away.includes(fAway) ||
-      away.split(' ').filter(w => w.length > 3).some(w => fAway.includes(w))
+    const homeMatch = teamMatch(homeTeam, f.teams.home.name)
+    const awayMatch = teamMatch(awayTeam, f.teams.away.name)
     return homeMatch && awayMatch
   }
 
@@ -174,7 +223,7 @@ export async function searchFixture(homeTeam: string, awayTeam: string, date: st
   const found = fixtures.find(matchTeams)
   if (found) return found
 
-  // Fallback: tenta dia anterior e dia seguinte (fuso horário pode causar diferença de 1 dia)
+  // Fallback: dia anterior e dia seguinte (fuso horário)
   const d = new Date(date)
   const prev = new Date(d); prev.setDate(prev.getDate() - 1)
   const next = new Date(d); next.setDate(next.getDate() + 1)
@@ -185,9 +234,17 @@ export async function searchFixture(homeTeam: string, awayTeam: string, date: st
     getFixturesByDate(fmt(next)),
   ])
 
-  console.log(`[searchFixture] ${homeTeam} vs ${awayTeam} @ ${date}: exactDate=${fixtures.length} fixtures, prev=${prevFixtures.length}, next=${nextFixtures.length}`)
+  console.log(`[searchFixture] ${homeTeam} vs ${awayTeam} @ ${date}: exactDate=${fixtures.length}, prev=${prevFixtures.length}, next=${nextFixtures.length}`)
 
-  return prevFixtures.find(matchTeams) ?? nextFixtures.find(matchTeams) ?? null
+  const result = prevFixtures.find(matchTeams) ?? nextFixtures.find(matchTeams) ?? null
+
+  if (!result) {
+    // Log detalhado para diagnóstico — mostra os times disponíveis naquele dia
+    const allTeams = fixtures.slice(0, 20).map(f => `${f.teams.home.name} vs ${f.teams.away.name}`).join(' | ')
+    console.log(`[searchFixture] NÃO ENCONTRADO: "${homeTeam}" vs "${awayTeam}". Times disponíveis: ${allTeams}`)
+  }
+
+  return result
 }
 
 function norm(s: string): string {
