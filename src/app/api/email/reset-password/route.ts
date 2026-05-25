@@ -30,6 +30,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true })
   }
 
+  console.log('[reset-password] action_link:', data.properties.action_link)
+
   const resendResult = await sendPasswordResetEmail(email, data.properties.action_link).catch(e => {
     console.error('[reset-password] resend error:', e?.message)
     return null
