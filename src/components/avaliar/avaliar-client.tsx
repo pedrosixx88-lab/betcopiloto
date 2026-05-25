@@ -385,9 +385,12 @@ export default function AvaliarClient({ isPro, podeUsarGratis, avaliacoesUsadas 
         </div>
       </div>
 
-      <p className="text-[10px] text-muted-foreground text-center">
-        Análise baseada em dados reais. Não é garantia de resultado. Aposte com responsabilidade.
-      </p>
+      <div className="flex items-start gap-2 bg-yellow-500/5 border border-yellow-500/20 rounded-xl px-4 py-3">
+        <AlertTriangle className="h-3.5 w-3.5 text-yellow-500 shrink-0 mt-0.5" />
+        <p className="text-[11px] text-muted-foreground leading-relaxed">
+          As análises são baseadas em dados estatísticos e têm caráter <strong className="text-foreground">exclusivamente informativo</strong>. Não garantimos acerto e não nos responsabilizamos por perdas financeiras. Aposte com responsabilidade. +18.
+        </p>
+      </div>
     </div>
   )
 }
