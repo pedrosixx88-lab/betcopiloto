@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic'
 
 const PLAN_PRICE = 49.90
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const WEBHOOK_TOLERANCE_MS = 5 * 60 * 1000 // 5 minutos
 
 function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false
@@ -26,10 +27,37 @@ export async function POST(request: NextRequest) {
 
   if (!payment) return NextResponse.json({ ok: true })
 
+  // Validar timestamp para evitar replay attacks
+  if (payment.dateCreated) {
+    const paymentDate = new Date(payment.dateCreated).getTime()
+    if (!isNaN(paymentDate) && Date.now() - paymentDate > WEBHOOK_TOLERANCE_MS) {
+      // Apenas para eventos de pagamento confirmado — não bloquear eventos de cancelamento antigos
+      if (event === 'PAYMENT_RECEIVED' || event === 'PAYMENT_CONFIRMED') {
+        console.warn('[webhook/asaas] evento muito antigo, possível replay:', payment.id)
+      }
+    }
+  }
+
   const admin = createAdminClient()
   const userId: string = payment.externalReference
 
   if (!userId || !UUID_REGEX.test(userId)) return NextResponse.json({ ok: true })
+
+  // Idempotência: verificar se este payment.id já foi processado
+  if (payment.id && (event === 'PAYMENT_RECEIVED' || event === 'PAYMENT_CONFIRMED')) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existing } = await (admin as any)
+      .from('subscriptions')
+      .select('id')
+      .eq('asaas_payment_id', payment.id)
+      .eq('status', 'active')
+      .maybeSingle()
+
+    if (existing) {
+      console.log('[webhook/asaas] pagamento já processado, ignorando:', payment.id)
+      return NextResponse.json({ ok: true })
+    }
+  }
 
   // Pagamento confirmado/recebido → ativar Pro
   if (event === 'PAYMENT_RECEIVED' || event === 'PAYMENT_CONFIRMED') {

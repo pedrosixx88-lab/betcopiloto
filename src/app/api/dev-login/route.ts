@@ -9,7 +9,8 @@ export async function GET() {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  const email = 'rita.riobranco1304@gmail.com'
+  const email = process.env.DEV_LOGIN_EMAIL
+  if (!email) return NextResponse.json({ error: 'DEV_LOGIN_EMAIL não configurado' }, { status: 500 })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any
 

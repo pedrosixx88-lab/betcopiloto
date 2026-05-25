@@ -24,6 +24,13 @@ function verifySignature(request: NextRequest, rawBody: string): boolean {
   const ts = parts.find(p => p.startsWith('ts='))?.split('=')[1] ?? ''
   const v1 = parts.find(p => p.startsWith('v1='))?.split('=')[1] ?? ''
 
+  // Rejeitar webhooks com timestamp fora da janela de 5 minutos
+  const tsNum = parseInt(ts, 10)
+  if (!isNaN(tsNum)) {
+    const ageMs = Date.now() - tsNum * 1000
+    if (ageMs > 5 * 60 * 1000 || ageMs < -60 * 1000) return false
+  }
+
   const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`
   const hash = crypto.createHmac('sha256', secret).update(manifest).digest('hex')
 

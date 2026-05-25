@@ -60,19 +60,14 @@ export async function proxy(request: NextRequest) {
   }
 
   if (user && pathname === '/dashboard') {
-    const referer = request.headers.get('referer') ?? ''
-    const comingFromOnboarding = referer.includes('/onboarding')
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('onboarding_completed')
+      .eq('id', user.id)
+      .single()
 
-    if (!comingFromOnboarding) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('onboarding_completed')
-        .eq('id', user.id)
-        .single()
-
-      if (profile && !profile.onboarding_completed) {
-        return NextResponse.redirect(new URL('/onboarding', request.url))
-      }
+    if (profile && !profile.onboarding_completed) {
+      return NextResponse.redirect(new URL('/onboarding', request.url))
     }
   }
 

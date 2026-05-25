@@ -148,11 +148,14 @@ export default function ApostaDetalhePage() {
   useEffect(() => {
     async function loadBet() {
       const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data } = await (supabase as any)
         .from('bets')
         .select('id, home_team, away_team, league, market, selection, odd, stake, potential_return, status, match_date, bookmaker, is_multiple, legs, screenshot_url')
         .eq('id', id)
+        .eq('user_id', user.id)
         .single()
       if (data) setBet(data)
     }
