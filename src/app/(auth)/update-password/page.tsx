@@ -17,22 +17,26 @@ export default function UpdatePasswordPage() {
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    // O Supabase envia o token no hash da URL: #access_token=...&type=recovery
-    // O cliente Supabase processa automaticamente o hash e cria a sessão
     const supabase = createClient()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
+      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
         setReady(true)
       }
     })
 
-    // Processar hash manualmente caso já tenha chegado antes do listener
+    // Verifica sessão existente
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setReady(true)
     })
 
-    return () => subscription.unsubscribe()
+    // Fallback: se em 3s ainda não tiver sessão, mostra o form mesmo assim
+    const timer = setTimeout(() => setReady(true), 3000)
+
+    return () => {
+      subscription.unsubscribe()
+      clearTimeout(timer)
+    }
   }, [])
 
   async function handleUpdate(e: React.FormEvent) {
