@@ -15,7 +15,6 @@ export default function UpdatePasswordPage() {
   const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
   const [ready, setReady] = useState(false)
-  const [invalid, setInvalid] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -36,16 +35,6 @@ export default function UpdatePasswordPage() {
     return () => subscription.unsubscribe()
   }, [])
 
-  // Timeout de 8 segundos para mostrar "link expirado"
-  useEffect(() => {
-    if (ready) return
-    const timer = setTimeout(async () => {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) setInvalid(true)
-    }, 8000)
-    return () => clearTimeout(timer)
-  }, [ready])
 
   async function handleUpdate(e: React.FormEvent) {
     e.preventDefault()
@@ -65,24 +54,6 @@ export default function UpdatePasswordPage() {
     await supabase.auth.signOut()
     toast.success('Senha atualizada! Faça login com a nova senha.')
     router.push('/login')
-  }
-
-  if (invalid) {
-    return (
-      <div className="min-h-screen flex items-center justify-center px-4">
-        <div className="w-full max-w-sm space-y-6 text-center">
-          <div className="flex items-center justify-center gap-2">
-            <TrendingUp className="h-7 w-7 text-primary" />
-            <span className="text-xl font-bold">BetCopiloto</span>
-          </div>
-          <h1 className="text-2xl font-bold">Link expirado</h1>
-          <p className="text-muted-foreground text-sm">Este link é inválido ou já expirou.</p>
-          <a href="/reset-password" className="inline-block w-full bg-primary text-primary-foreground text-center py-3 rounded-lg font-medium text-sm">
-            Solicitar novo link
-          </a>
-        </div>
-      </div>
-    )
   }
 
   return (
