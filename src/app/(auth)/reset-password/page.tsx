@@ -18,10 +18,10 @@ export default function ResetPasswordPage() {
     setLoading(true)
 
     try {
-      await fetch('/api/email/reset-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+      const { createClient } = await import('@/lib/supabase/client')
+      const supabase = createClient()
+      await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/update-password`,
       })
       setSent(true)
     } catch {

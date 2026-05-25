@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
@@ -14,6 +14,40 @@ export default function UpdatePasswordPage() {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
+  const [ready, setReady] = useState(false)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    const supabase = createClient()
+
+    // Tenta pegar sessão existente (caso já esteja logado via callback)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setReady(true)
+        return
+      }
+
+      // Processa o hash da URL manualmente
+      const hash = window.location.hash
+      if (hash && hash.includes('access_token')) {
+        const params = new URLSearchParams(hash.replace('#', ''))
+        const accessToken = params.get('access_token')
+        const refreshToken = params.get('refresh_token')
+
+        if (accessToken && refreshToken) {
+          supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+            .then(({ error }) => {
+              if (error) setError(true)
+              else setReady(true)
+            })
+          return
+        }
+      }
+
+      // Sem token e sem sessão
+      setError(true)
+    })
+  }, [])
 
   async function handleUpdate(e: React.FormEvent) {
     e.preventDefault()
@@ -54,37 +88,51 @@ export default function UpdatePasswordPage() {
           <p className="text-muted-foreground text-sm">Digite sua nova senha abaixo.</p>
         </div>
 
-        <form onSubmit={handleUpdate} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="password">Nova senha</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="new-password"
-            />
+        {error ? (
+          <div className="text-center space-y-4">
+            <p className="text-sm text-destructive">Link inválido ou expirado.</p>
+            <a href="/reset-password" className="text-primary hover:underline text-sm">
+              Solicitar novo link
+            </a>
           </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="confirm">Confirmar senha</Label>
-            <Input
-              id="confirm"
-              type="password"
-              placeholder="••••••••"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              required
-              autoComplete="new-password"
-            />
+        ) : !ready ? (
+          <div className="text-center text-muted-foreground text-sm flex items-center justify-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Verificando...
           </div>
+        ) : (
+          <form onSubmit={handleUpdate} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="password">Nova senha</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="new-password"
+              />
+            </div>
 
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar nova senha'}
-          </Button>
-        </form>
+            <div className="space-y-2">
+              <Label htmlFor="confirm">Confirmar senha</Label>
+              <Input
+                id="confirm"
+                type="password"
+                placeholder="••••••••"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                required
+                autoComplete="new-password"
+              />
+            </div>
+
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar nova senha'}
+            </Button>
+          </form>
+        )}
       </div>
     </div>
   )
