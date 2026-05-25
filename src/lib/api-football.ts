@@ -351,6 +351,19 @@ export async function resolveWithStats(
   return null
 }
 
+// Estatísticas de múltiplos fixtures de uma vez (para calcular médias de escanteios/cartões)
+export async function getFixturesStats(fixtureIds: number[]): Promise<Record<number, any[]>> {
+  if (fixtureIds.length === 0) return {}
+  const results = await Promise.allSettled(
+    fixtureIds.map(id => getFixtureStats(id).then(stats => ({ id, stats })))
+  )
+  const map: Record<number, any[]> = {}
+  for (const r of results) {
+    if (r.status === 'fulfilled') map[r.value.id] = r.value.stats
+  }
+  return map
+}
+
 // Mantido para compatibilidade legada — use resolveWithStats sempre que possível
 export function resolveMatchWinner(fixture: Fixture, selection: string, market: string): 'won' | 'lost' | 'void' | null {
   const status = fixture.fixture.status.short

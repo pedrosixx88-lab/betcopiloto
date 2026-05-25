@@ -8,6 +8,7 @@ import {
   getFixtureLineups,
   getFixtureInjuries,
   getFixtureStats,
+  getFixturesStats,
   getStandings,
   getH2H,
   getTeamSeasonStats,
@@ -262,6 +263,112 @@ REGRAS:
         const formaHome = calcForma(formaHomeRaw, homeId)
         const formaAway = calcForma(formaAwayRaw, awayId)
 
+        // ── Médias de escanteios, cartões, xG e chutes dos últimos jogos ──
+        const calcMediasJogos = async (partidas: any[], teamId: number) => {
+          const jogosEncerrados = partidas.filter(m => {
+            const s = m.fixture?.status?.short
+            return ['FT', 'AET', 'PEN', 'AWD', 'WO'].includes(s)
+          }).slice(0, 5)
+
+          if (jogosEncerrados.length === 0) return null
+
+          const ids = jogosEncerrados.map((m: any) => m.fixture.id as number)
+          const statsMap = await getFixturesStats(ids)
+
+          let escanteiosPro = 0, escanteirosTotal = 0
+          let cartosAmarelos = 0, cartosVermelhos = 0
+          let xgPro = 0, chutesGolPro = 0, chutesTotalPro = 0
+          let escanteiosOponente = 0
+          let n = 0
+
+          for (const m of jogosEncerrados) {
+            const stats = statsMap[m.fixture.id]
+            if (!stats || stats.length === 0) continue
+            const ehCasa = m.teams?.home?.id === teamId
+            const teamName = ehCasa ? m.teams.home.name : m.teams.away.name
+            const oppName = ehCasa ? m.teams.away.name : m.teams.home.name
+
+            const getSt = (name: string, tipo: string) => {
+              const t = stats.find((s: any) => s.team?.name === name || s.team?.id === (ehCasa ? teamId : (teamId === m.teams.home.id ? m.teams.away.id : m.teams.home.id)))
+              // busca mais robusta pelo nome parcial
+              const team = stats.find((s: any) => {
+                const tn = (s.team?.name ?? '').toLowerCase()
+                return tn.includes(name.toLowerCase().split(' ')[0]) || name.toLowerCase().includes(tn.split(' ')[0])
+              })
+              return team?.statistics?.find((s: any) => s.type === tipo)?.value ?? null
+            }
+
+            // busca por ID do time
+            const teamStats = stats.find((s: any) => s.team?.id === teamId)
+            const oppStats = stats.find((s: any) => s.team?.id !== teamId)
+
+            const corners = teamStats?.statistics?.find((s: any) => s.type === 'Corner Kicks')?.value
+            const cornersOpp = oppStats?.statistics?.find((s: any) => s.type === 'Corner Kicks')?.value
+            const yellow = teamStats?.statistics?.find((s: any) => s.type === 'Yellow Cards')?.value
+            const red = teamStats?.statistics?.find((s: any) => s.type === 'Red Cards')?.value
+            const xg = teamStats?.statistics?.find((s: any) => s.type === 'expected_goals')?.value
+            const shotsOnGoal = teamStats?.statistics?.find((s: any) => s.type === 'Shots on Goal')?.value
+            const shotsTotal = teamStats?.statistics?.find((s: any) => s.type === 'Total Shots')?.value
+
+            if (typeof corners === 'number') { escanteiosPro += corners; n++ }
+            if (typeof cornersOpp === 'number') escanteiosOponente += cornersOpp
+            if (typeof corners === 'number' && typeof cornersOpp === 'number') escanteirosTotal += corners + cornersOpp
+            if (typeof yellow === 'number') cartosAmarelos += yellow
+            if (typeof red === 'number') cartosVermelhos += red
+            if (xg) xgPro += parseFloat(xg)
+            if (typeof shotsOnGoal === 'number') chutesGolPro += shotsOnGoal
+            if (typeof shotsTotal === 'number') chutesTotalPro += shotsTotal
+          }
+
+          if (n === 0) return null
+
+          return {
+            jogos_analisados: n,
+            escanteios: {
+              media_pro: (escanteiosPro / n).toFixed(1),
+              media_oponente: (escanteiosOponente / n).toFixed(1),
+              media_total_jogo: (escanteirosTotal / n).toFixed(1),
+            },
+            cartoesAmarelos: {
+              media_pro: (cartosAmarelos / n).toFixed(1),
+            },
+            cartoesVermelhos: {
+              media_pro: (cartosVermelhos / n).toFixed(1),
+            },
+            xg: {
+              media_pro: (xgPro / n).toFixed(2),
+            },
+            chutes: {
+              media_ao_gol: (chutesGolPro / n).toFixed(1),
+              media_total: (chutesTotalPro / n).toFixed(1),
+            },
+          }
+        }
+
+        // Executa em paralelo para os dois times
+        const [mediasHome, mediasAway] = await Promise.all([
+          calcMediasJogos(formaHomeRaw, homeId),
+          calcMediasJogos(formaAwayRaw, awayId),
+        ])
+
+        // ── Cartões da temporada (via teams/statistics) ──
+        const totalCartoesTemporada = (ts: any) => {
+          if (!ts?.cards) return null
+          const yellowTotal = Object.values(ts.cards.yellow ?? {})
+            .reduce((s: number, v: any) => s + (v?.total ?? 0), 0)
+          const redTotal = Object.values(ts.cards.red ?? {})
+            .reduce((s: number, v: any) => s + (v?.total ?? 0), 0)
+          const jogos = ts.fixtures?.played?.total || 1
+          return {
+            amarelos_total: yellowTotal,
+            vermelhos_total: redTotal,
+            media_amarelos_jogo: (yellowTotal / jogos).toFixed(2),
+            media_vermelhos_jogo: (redTotal / jogos).toFixed(2),
+          }
+        }
+        const cartoesHomeTemp = totalCartoesTemporada(statsHome)
+        const cartoesAwayTemp = totalCartoesTemporada(statsAway)
+
         // ── Estatísticas de temporada formatadas ──
         const fmtTemporada = (ts: any, nome: string, ehCasa: boolean) => {
           if (!ts) return `  ${nome}: estatísticas não disponíveis`
@@ -463,6 +570,18 @@ REGRAS:
             forma_casa: { resumo: formaHome.resumo, partidas: formaHome.linhas },
             forma_fora: { resumo: formaAway.resumo, partidas: formaAway.linhas },
 
+            // Médias reais por jogo (escanteios, cartões, xG, chutes)
+            medias_jogo: {
+              casa: mediasHome,
+              fora: mediasAway,
+            },
+
+            // Cartões da temporada completa
+            cartoes_temporada: {
+              casa: cartoesHomeTemp,
+              fora: cartoesAwayTemp,
+            },
+
             // Odds por mercado e por casa
             odds: {
               casas_disponiveis: oddsRaw.length,
@@ -545,6 +664,8 @@ REGRAS:
     const av = analise_valor
     const escH = data.escalacao.casa
     const escA = data.escalacao.fora
+    const mj = data.medias_jogo
+    const ct = data.cartoes_temporada
 
     return `
 ════════════════════════════════════════════════════════
@@ -606,6 +727,22 @@ ${odds.btts ? `  BTTS (Ambas marcam) — Sim: ${odds.btts.media_sim} | Não: ${o
 ${odds.double_chance ? `  Double Chance — 1X (casa ou empate): ${odds.double_chance.media_1x} | X2 (empate ou fora): ${odds.double_chance.media_x2}` : ''}
 ${odds.por_casa.length > 0 ? `\n  ODD DO APOSTADOR: ${leg.odd}x para "${leg.selection}"\n  Por casa de apostas (⚡ = casa sharp/indicador de mercado):\n${odds.por_casa.slice(0, 14).join('\n')}` : ''}
 
+▌ ESCANTEIOS — MÉDIAS REAIS (últimos 5 jogos encerrados)
+${mj.casa ? `  ${fixture.home}: ${mj.casa.escanteios.media_pro} escanteios/jogo a favor | ${mj.casa.escanteios.media_oponente} do oponente | Total médio no jogo: ${mj.casa.escanteios.media_total_jogo} (${mj.casa.jogos_analisados} jogos)` : `  ${fixture.home}: dados insuficientes`}
+${mj.fora ? `  ${fixture.away}: ${mj.fora.escanteios.media_pro} escanteios/jogo a favor | ${mj.fora.escanteios.media_oponente} do oponente | Total médio no jogo: ${mj.fora.escanteios.media_total_jogo} (${mj.fora.jogos_analisados} jogos)` : `  ${fixture.away}: dados insuficientes`}
+${mj.casa && mj.fora ? `  TOTAL ESPERADO COMBINADO (soma das médias pró de cada time): ${(parseFloat(mj.casa.escanteios.media_pro) + parseFloat(mj.fora.escanteios.media_pro)).toFixed(1)} escanteios` : ''}
+
+▌ CARTÕES — MÉDIAS REAIS
+${mj.casa ? `  ${fixture.home} (últimos ${mj.casa.jogos_analisados} jogos): ${mj.casa.cartoesAmarelos.media_pro} amarelos/jogo | ${mj.casa.cartoesVermelhos.media_pro} vermelhos/jogo` : `  ${fixture.home}: dados insuficientes`}
+${mj.fora ? `  ${fixture.away} (últimos ${mj.fora.jogos_analisados} jogos): ${mj.fora.cartoesAmarelos.media_pro} amarelos/jogo | ${mj.fora.cartoesVermelhos.media_pro} vermelhos/jogo` : `  ${fixture.away}: dados insuficientes`}
+${ct.casa ? `  ${fixture.home} temporada inteira: ${ct.casa.amarelos_total} amarelos (${ct.casa.media_amarelos_jogo}/jogo) | ${ct.casa.vermelhos_total} vermelhos (${ct.casa.media_vermelhos_jogo}/jogo)` : ''}
+${ct.fora ? `  ${fixture.away} temporada inteira: ${ct.fora.amarelos_total} amarelos (${ct.fora.media_amarelos_jogo}/jogo) | ${ct.fora.vermelhos_total} vermelhos (${ct.fora.media_vermelhos_jogo}/jogo)` : ''}
+${mj.casa && mj.fora ? `  TOTAL AMARELOS ESPERADO (soma das médias): ${(parseFloat(mj.casa.cartoesAmarelos.media_pro) + parseFloat(mj.fora.cartoesAmarelos.media_pro)).toFixed(1)} amarelos` : ''}
+
+▌ xG E CHUTES — MÉDIAS REAIS (últimos 5 jogos)
+${mj.casa ? `  ${fixture.home}: xG ${mj.casa.xg.media_pro}/jogo | Chutes ao gol: ${mj.casa.chutes.media_ao_gol}/jogo | Chutes totais: ${mj.casa.chutes.media_total}/jogo` : `  ${fixture.home}: dados insuficientes`}
+${mj.fora ? `  ${fixture.away}: xG ${mj.fora.xg.media_pro}/jogo | Chutes ao gol: ${mj.fora.chutes.media_ao_gol}/jogo | Chutes totais: ${mj.fora.chutes.media_total}/jogo` : `  ${fixture.away}: dados insuficientes`}
+
 ▌ ESCALAÇÃO
 ${escH ? `  ${fixture.home} (${escH.formacao}) | Técnico: ${escH.tecnico ?? 'N/D'}
   Titulares: ${escH.titulares?.join(', ') ?? 'N/D'}` : `  ${fixture.home}: escalação não confirmada`}
@@ -629,11 +766,15 @@ ${data.stats_jogo ? `▌ ESTATÍSTICAS DO JOGO (já encerrado)
   const prompt = `Você é um analista quantitativo de apostas esportivas, especialista em detecção de valor e gestão de banca. Analise este bilhete com profundidade usando EXCLUSIVAMENTE os dados reais abaixo.
 
 REGRAS ABSOLUTAS:
-1. Use APENAS números e dados presentes nos blocos abaixo — nunca invente
+1. Use APENAS números e dados presentes nos blocos abaixo — NUNCA invente estatísticas
 2. Para cada jogo, calcule e explique o EDGE (diferença entre prob real e prob implícita na odd)
 3. Avalie a seleção específica do apostador à luz dos dados do mercado (casas sharp como Pinnacle)
 4. Se Pinnacle ou outra casa sharp tiver odd MUITO diferente da odd do apostador, isso é sinal forte
-5. "DADOS INSUFICIENTES" somente se previsão, tabela e forma estiverem TODOS indisponíveis
+5. "DADOS INSUFICIENTES" somente se previsão, tabela, forma E médias de jogo estiverem TODOS indisponíveis
+6. Para mercados de ESCANTEIOS: use os blocos "ESCANTEIOS — MÉDIAS REAIS" — cite as médias exatas de cada time e o total esperado combinado. Compare com a linha proposta pelo apostador.
+7. Para mercados de CARTÕES: use os blocos "CARTÕES — MÉDIAS REAIS" e "temporada inteira" — cite médias por jogo e total esperado combinado.
+8. Para mercados de GOLS/OVER/UNDER: use xG médio, médias de gols marcados/sofridos da forma, e gols esperados do Poisson.
+9. Se os dados de escanteios/cartões estiverem indisponíveis para um mercado específico, diga explicitamente "dados insuficientes para este mercado" — nunca estime.
 
 CONTEXTO DO APOSTADOR:
 Banca: R$ ${bankroll.toFixed(2)}
