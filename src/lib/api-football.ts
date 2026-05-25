@@ -114,6 +114,12 @@ export async function getFixtureStats(fixtureId: number): Promise<any[]> {
   return data ?? []
 }
 
+// Estatísticas individuais dos jogadores no fixture (gols, defesas, cartões, assistências)
+export async function getFixturePlayers(fixtureId: number): Promise<any[]> {
+  const data = await apiFetch<any[]>(`/fixtures/players?fixture=${fixtureId}`)
+  return data ?? []
+}
+
 export async function searchFixture(homeTeam: string, awayTeam: string, date: string): Promise<Fixture | null> {
   const fixtures = await getFixturesByDate(date)
   const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
@@ -128,7 +134,33 @@ export async function searchFixture(homeTeam: string, awayTeam: string, date: st
   }) ?? null
 }
 
-export function resolveMatchWinner(fixture: Fixture, selection: string, market: string): 'won' | 'lost' | 'void' | null {
+function norm(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+}
+
+function statValue(stats: any[], teamName: string, type: string): number {
+  const t = stats.find((s: any) => norm(s.team?.name ?? '').includes(norm(teamName)))
+  return t?.statistics?.find((s: any) => norm(s.type) === norm(type))?.value ?? 0
+}
+
+function totalStat(stats: any[], type: string): number {
+  return stats.reduce((sum: number, t: any) => {
+    return sum + (t.statistics?.find((s: any) => norm(s.type) === norm(type))?.value ?? 0)
+  }, 0)
+}
+
+function lineOver(sel: string, actual: number, line: number): 'won' | 'lost' {
+  const isOver = sel.includes('over') || sel.includes('mais') || sel.includes('+') || sel.includes('acima')
+  return isOver ? (actual > line ? 'won' : 'lost') : (actual < line ? 'won' : 'lost')
+}
+
+// Resolver principal — detecta automaticamente o mercado e busca estatísticas quando necessário
+export async function resolveWithStats(
+  fixture: Fixture,
+  selection: string,
+  market: string,
+  fixtureId: number
+): Promise<'won' | 'lost' | 'void' | null> {
   const status = fixture.fixture.status.short
   if (!['FT', 'AET', 'PEN', 'AWD', 'WO'].includes(status)) return null
 
@@ -136,30 +168,157 @@ export function resolveMatchWinner(fixture: Fixture, selection: string, market: 
   const awayGoals = fixture.score.fulltime.away ?? fixture.goals.away
   if (homeGoals === null || awayGoals === null) return 'void'
 
-  const sel = selection.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-  const homeTeam = fixture.teams.home.name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-  const awayTeam = fixture.teams.away.name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  const sel = norm(selection)
+  const home = norm(fixture.teams.home.name)
+  const away = norm(fixture.teams.away.name)
 
+  // --- Resultado final ---
   if (market === 'match_winner') {
-    if (homeGoals > awayGoals) return sel.includes(homeTeam) || sel.includes('casa') || sel === '1' ? 'won' : 'lost'
-    if (awayGoals > homeGoals) return sel.includes(awayTeam) || sel.includes('fora') || sel === '2' ? 'won' : 'lost'
+    if (homeGoals > awayGoals) return sel.includes(home) || sel.includes('casa') || sel === '1' ? 'won' : 'lost'
+    if (awayGoals > homeGoals) return sel.includes(away) || sel.includes('fora') || sel === '2' ? 'won' : 'lost'
     return sel.includes('empate') || sel === 'x' || sel === 'draw' ? 'won' : 'lost'
   }
 
+  // --- Over/Under gols ---
   if (market === 'over_under') {
     const total = homeGoals + awayGoals
-    const lineMatch = sel.match(/(\d+\.?\d*)/)
-    if (!lineMatch) return 'void'
-    const line = parseFloat(lineMatch[1])
-    return (sel.includes('over') || sel.includes('mais') || sel.includes('+'))
-      ? total > line ? 'won' : 'lost'
-      : total < line ? 'won' : 'lost'
+    const m = sel.match(/(\d+\.?\d*)/)
+    if (!m) return 'void'
+    return lineOver(sel, total, parseFloat(m[1]))
   }
 
+  // --- Ambas marcam ---
   if (market === 'both_teams_score') {
     const btts = homeGoals > 0 && awayGoals > 0
     return (sel.includes('sim') || sel.includes('yes')) ? (btts ? 'won' : 'lost') : (!btts ? 'won' : 'lost')
   }
 
+  // --- Placar exato ---
+  if (market === 'correct_score') {
+    const m = sel.match(/(\d+)\s*[x\-:]\s*(\d+)/)
+    if (!m) return 'void'
+    return homeGoals === parseInt(m[1]) && awayGoals === parseInt(m[2]) ? 'won' : 'lost'
+  }
+
+  // --- Handicap ---
+  if (market === 'handicap') {
+    const m = sel.match(/([+-]?\d+\.?\d*)/)
+    if (!m) return 'void'
+    const h = parseFloat(m[1])
+    const isHome = sel.includes(home) || sel.includes('casa')
+    const diff = isHome ? (homeGoals - awayGoals + h) : (awayGoals - homeGoals + h)
+    return diff > 0 ? 'won' : diff < 0 ? 'lost' : 'void'
+  }
+
+  // --- Mercados com estatísticas do jogo ---
+  const wantsCorners = sel.includes('escanteio') || sel.includes('corner') || sel.includes('canto') || market === 'corners'
+  const wantsCards   = sel.includes('cartao') || sel.includes('cartoes') || sel.includes('amarelo') || sel.includes('vermelho') || sel.includes('card') || market === 'cards'
+  const wantsSaves   = sel.includes('defesa') || sel.includes('save') || sel.includes('goleiro')
+  const wantsPlayer  = sel.includes('gol') || sel.includes('marcar') || sel.includes('assistencia') || sel.includes('scorer') || wantsSaves
+
+  if (!wantsCorners && !wantsCards && !wantsSaves && !wantsPlayer) return null
+
+  // Busca paralela de stats e players
+  const [fixtureStats, playerStats] = await Promise.all([
+    (wantsCorners || wantsCards || wantsSaves) ? getFixtureStats(fixtureId) : Promise.resolve([]),
+    wantsPlayer ? getFixturePlayers(fixtureId) : Promise.resolve([]),
+  ])
+
+  // --- Escanteios ---
+  if (wantsCorners) {
+    const m = sel.match(/(\d+\.?\d*)/)
+    if (!m || fixtureStats.length === 0) return 'void'
+    const line = parseFloat(m[1])
+    const total = sel.includes(home) ? statValue(fixtureStats, fixture.teams.home.name, 'Corner Kicks')
+      : sel.includes(away) ? statValue(fixtureStats, fixture.teams.away.name, 'Corner Kicks')
+      : totalStat(fixtureStats, 'Corner Kicks')
+    return lineOver(sel, total, line)
+  }
+
+  // --- Cartões ---
+  if (wantsCards) {
+    const m = sel.match(/(\d+\.?\d*)/)
+    if (!m || fixtureStats.length === 0) return 'void'
+    const line = parseFloat(m[1])
+    const type = (sel.includes('vermelho') || sel.includes('red')) ? 'Red Cards' : 'Yellow Cards'
+    const total = sel.includes(home) ? statValue(fixtureStats, fixture.teams.home.name, type)
+      : sel.includes(away) ? statValue(fixtureStats, fixture.teams.away.name, type)
+      : totalStat(fixtureStats, type)
+    return lineOver(sel, total, line)
+  }
+
+  // --- Defesas do goleiro ---
+  if (wantsSaves) {
+    const m = sel.match(/(\d+)/)
+    if (!m) return 'void'
+    const line = parseInt(m[1])
+
+    // Tenta por nome de jogador
+    for (const teamData of playerStats) {
+      for (const p of teamData.players ?? []) {
+        const pname = norm(p.player?.name ?? '')
+        const words = pname.split(' ').filter((w: string) => w.length > 3)
+        if (sel.includes(pname) || words.some((w: string) => sel.includes(w))) {
+          const saves = p.statistics?.[0]?.goals?.saves ?? 0
+          return lineOver(sel, saves, line)
+        }
+      }
+    }
+
+    // Fallback: defesas de time pelo contexto
+    if (fixtureStats.length > 0) {
+      const saves = sel.includes(away)
+        ? statValue(fixtureStats, fixture.teams.away.name, 'Goalkeeper Saves')
+        : statValue(fixtureStats, fixture.teams.home.name, 'Goalkeeper Saves')
+      return lineOver(sel, saves, line)
+    }
+    return 'void'
+  }
+
+  // --- Gol / assistência de jogador ---
+  if (wantsPlayer && playerStats.length > 0) {
+    for (const teamData of playerStats) {
+      for (const p of teamData.players ?? []) {
+        const pname = norm(p.player?.name ?? '')
+        const words = pname.split(' ').filter((w: string) => w.length > 3)
+        if (sel.includes(pname) || words.some((w: string) => sel.includes(w))) {
+          const stats = p.statistics?.[0]
+          const isAssist = sel.includes('assistencia') || sel.includes('assist')
+          const actual = isAssist ? (stats?.goals?.assists ?? 0) : (stats?.goals?.total ?? 0)
+          const m = sel.match(/(\d+)/)
+          return lineOver(sel, actual, m ? parseInt(m[1]) : 1)
+        }
+      }
+    }
+  }
+
+  return null
+}
+
+// Mantido para compatibilidade legada — use resolveWithStats sempre que possível
+export function resolveMatchWinner(fixture: Fixture, selection: string, market: string): 'won' | 'lost' | 'void' | null {
+  const status = fixture.fixture.status.short
+  if (!['FT', 'AET', 'PEN', 'AWD', 'WO'].includes(status)) return null
+  const homeGoals = fixture.score.fulltime.home ?? fixture.goals.home
+  const awayGoals = fixture.score.fulltime.away ?? fixture.goals.away
+  if (homeGoals === null || awayGoals === null) return 'void'
+  const sel = norm(selection)
+  const home = norm(fixture.teams.home.name)
+  const away = norm(fixture.teams.away.name)
+  if (market === 'match_winner') {
+    if (homeGoals > awayGoals) return sel.includes(home) || sel.includes('casa') || sel === '1' ? 'won' : 'lost'
+    if (awayGoals > homeGoals) return sel.includes(away) || sel.includes('fora') || sel === '2' ? 'won' : 'lost'
+    return sel.includes('empate') || sel === 'x' ? 'won' : 'lost'
+  }
+  if (market === 'over_under') {
+    const total = homeGoals + awayGoals
+    const m = sel.match(/(\d+\.?\d*)/)
+    if (!m) return 'void'
+    return lineOver(sel, total, parseFloat(m[1]))
+  }
+  if (market === 'both_teams_score') {
+    const btts = homeGoals > 0 && awayGoals > 0
+    return (sel.includes('sim') || sel.includes('yes')) ? (btts ? 'won' : 'lost') : (!btts ? 'won' : 'lost')
+  }
   return null
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getFixtureById, searchFixture, resolveMatchWinner } from '@/lib/api-football'
+import { getFixtureById, searchFixture, resolveWithStats } from '@/lib/api-football'
 import crypto from 'crypto'
 
 function timingSafeEqual(a: string, b: string): boolean {
@@ -60,7 +60,8 @@ export async function GET(request: NextRequest) {
 
       if (!fixture) { results.skipped++; continue }
 
-      const newStatus = resolveMatchWinner(fixture, bet.selection, bet.market)
+      const fixtureId = fixture.fixture.id
+      const newStatus = await resolveWithStats(fixture, bet.selection, bet.market, fixtureId)
       if (!newStatus) { results.skipped++; continue }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -126,6 +126,24 @@ export default function ApostaDetalhePage() {
   const [tab, setTab] = useState<'resumo' | 'acompanhar'>('resumo')
   const [loadingGames, setLoadingGames] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [resolvendo, setResolvendo] = useState(false)
+
+  async function marcarResultado(status: 'won' | 'lost' | 'void') {
+    if (!bet || resolvendo) return
+    setResolvendo(true)
+    try {
+      const res = await fetch(`/api/apostas/${bet.id}/resultado`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      if (res.ok) {
+        setBet(prev => prev ? { ...prev, status } : prev)
+      }
+    } finally {
+      setResolvendo(false)
+    }
+  }
 
   useEffect(() => {
     async function loadBet() {
@@ -250,6 +268,31 @@ export default function ApostaDetalhePage() {
               {bet.bookmaker && <span>{bet.bookmaker}</span>}
             </div>
           </div>
+
+          {/* Marcar resultado — só aparece se pendente */}
+          {bet.status === 'pending' && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Resultado</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => marcarResultado('won')}
+                  disabled={resolvendo}
+                  className="flex items-center justify-center gap-2 py-3 rounded-xl bg-primary/10 border border-primary/30 text-primary font-semibold text-sm hover:bg-primary/20 transition-all disabled:opacity-50"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  Green ✓
+                </button>
+                <button
+                  onClick={() => marcarResultado('lost')}
+                  disabled={resolvendo}
+                  className="flex items-center justify-center gap-2 py-3 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive font-semibold text-sm hover:bg-destructive/20 transition-all disabled:opacity-50"
+                >
+                  <XCircle className="h-4 w-4" />
+                  Red ✗
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Jogos do bilhete */}
           <div className="space-y-2">
