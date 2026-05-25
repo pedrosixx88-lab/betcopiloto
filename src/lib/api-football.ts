@@ -120,6 +120,30 @@ export async function getFixturePlayers(fixtureId: number): Promise<any[]> {
   return data ?? []
 }
 
+// Escalações confirmadas (formação, titulares, técnico)
+export async function getFixtureLineups(fixtureId: number): Promise<any[]> {
+  const data = await apiFetch<any[]>(`/fixtures/lineups?fixture=${fixtureId}`)
+  return data ?? []
+}
+
+// Lesões e suspensões para o fixture
+export async function getFixtureInjuries(fixtureId: number): Promise<any[]> {
+  const data = await apiFetch<any[]>(`/injuries?fixture=${fixtureId}`)
+  return data ?? []
+}
+
+// Previsão da API: % vitória/empate/derrota, Poisson, comparativo, conselho
+export async function getFixturePredictions(fixtureId: number): Promise<any | null> {
+  const data = await apiFetch<any[]>(`/predictions?fixture=${fixtureId}`)
+  return data?.[0] ?? null
+}
+
+// Eventos do jogo (gols, cartões, substituições)
+export async function getFixtureEvents(fixtureId: number): Promise<any[]> {
+  const data = await apiFetch<any[]>(`/fixtures/events?fixture=${fixtureId}`)
+  return data ?? []
+}
+
 export async function searchFixture(homeTeam: string, awayTeam: string, date: string): Promise<Fixture | null> {
   const fixtures = await getFixturesByDate(date)
   const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
