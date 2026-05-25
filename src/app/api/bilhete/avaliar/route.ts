@@ -147,17 +147,17 @@ market deve ser: match_winner | over_under | both_teams_score | handicap | corne
           getFixtureOdds(fid),
         ])
 
-        const pred = predResult.status === 'fulfilled' ? predResult.value : null
-        const lu = lineupsResult.status === 'fulfilled' ? lineupsResult.value : []
-        const inj = injuriesResult.status === 'fulfilled' ? injuriesResult.value : []
-        const stats = fixtureStatsResult.status === 'fulfilled' ? fixtureStatsResult.value : []
-        const standingsRaw = standingsResult.status === 'fulfilled' ? standingsResult.value : []
-        const h2hRaw = h2hResult.status === 'fulfilled' ? h2hResult.value : []
-        const homeStats = homeStatsResult.status === 'fulfilled' ? homeStatsResult.value : null
-        const awayStats = awayStatsResult.status === 'fulfilled' ? awayStatsResult.value : null
-        const homeFormRaw = homeFormResult.status === 'fulfilled' ? homeFormResult.value : []
-        const awayFormRaw = awayFormResult.status === 'fulfilled' ? awayFormResult.value : []
-        const oddsRaw = oddsResult.status === 'fulfilled' ? oddsResult.value : []
+        const pred = predResult.status === 'fulfilled' ? (predResult.value ?? null) : null
+        const lu = lineupsResult.status === 'fulfilled' ? (lineupsResult.value ?? []) : []
+        const inj = injuriesResult.status === 'fulfilled' ? (injuriesResult.value ?? []) : []
+        const stats = fixtureStatsResult.status === 'fulfilled' ? (fixtureStatsResult.value ?? []) : []
+        const standingsRaw = standingsResult.status === 'fulfilled' ? (standingsResult.value ?? []) : []
+        const h2hRaw = h2hResult.status === 'fulfilled' ? (h2hResult.value ?? []) : []
+        const homeStats = homeStatsResult.status === 'fulfilled' ? (homeStatsResult.value ?? null) : null
+        const awayStats = awayStatsResult.status === 'fulfilled' ? (awayStatsResult.value ?? null) : null
+        const homeFormRaw = homeFormResult.status === 'fulfilled' ? (homeFormResult.value ?? []) : []
+        const awayFormRaw = awayFormResult.status === 'fulfilled' ? (awayFormResult.value ?? []) : []
+        const oddsRaw = oddsResult.status === 'fulfilled' ? (oddsResult.value ?? []) : []
 
         console.log(`[avaliar] data: pred=${!!pred} lu=${lu.length} inj=${inj.length} std=${standingsRaw.length} h2h=${h2hRaw.length} hStats=${!!homeStats} aStats=${!!awayStats} hForm=${homeFormRaw.length} aForm=${awayFormRaw.length} odds=${oddsRaw.length}`)
 

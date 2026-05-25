@@ -64,11 +64,13 @@ export const FEATURED_LEAGUES = [
 ]
 
 export async function getFixturesByDate(date: string): Promise<Fixture[]> {
-  return apiFetch<Fixture[]>(`/fixtures?date=${date}&timezone=America/Sao_Paulo`)
+  const data = await apiFetch<Fixture[]>(`/fixtures?date=${date}&timezone=America/Sao_Paulo`)
+  return data ?? []
 }
 
 export async function getFixturesByLeagueAndDate(leagueId: number, date: string): Promise<Fixture[]> {
-  return apiFetch<Fixture[]>(`/fixtures?league=${leagueId}&date=${date}&timezone=America/Sao_Paulo`)
+  const data = await apiFetch<Fixture[]>(`/fixtures?league=${leagueId}&date=${date}&timezone=America/Sao_Paulo`)
+  return data ?? []
 }
 
 export async function getFixtureById(id: number): Promise<Fixture | null> {
@@ -82,12 +84,14 @@ export async function getTeamStats(teamId: number, leagueId: number, season: num
 }
 
 export async function getH2H(homeId: number, awayId: number): Promise<H2HFixture[]> {
-  return apiFetch<H2HFixture[]>(`/fixtures/headtohead?h2h=${homeId}-${awayId}&last=5`)
+  const data = await apiFetch<H2HFixture[]>(`/fixtures/headtohead?h2h=${homeId}-${awayId}&last=5`)
+  return data ?? []
 }
 
 // Últimas N partidas de um time (todas as competições)
 export async function getLastMatches(teamId: number, last = 5): Promise<Fixture[]> {
-  return apiFetch<Fixture[]>(`/fixtures?team=${teamId}&last=${last}&timezone=America/Sao_Paulo`)
+  const data = await apiFetch<Fixture[]>(`/fixtures?team=${teamId}&last=${last}&timezone=America/Sao_Paulo`)
+  return data ?? []
 }
 
 // Classificação de liga/grupo — retorna array de standings
