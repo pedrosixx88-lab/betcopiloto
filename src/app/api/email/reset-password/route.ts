@@ -20,12 +20,21 @@ export async function POST(request: NextRequest) {
     },
   })
 
-  if (error || !data?.properties?.action_link) {
-    // Retorna ok mesmo se e-mail não existe (segurança — não revelar cadastros)
+  if (error) {
+    console.error('[reset-password] generateLink error:', error.message)
     return NextResponse.json({ ok: true })
   }
 
-  await sendPasswordResetEmail(email, data.properties.action_link).catch(() => {})
+  if (!data?.properties?.action_link) {
+    console.error('[reset-password] sem action_link, data:', JSON.stringify(data))
+    return NextResponse.json({ ok: true })
+  }
+
+  const resendResult = await sendPasswordResetEmail(email, data.properties.action_link).catch(e => {
+    console.error('[reset-password] resend error:', e?.message)
+    return null
+  })
+  console.log('[reset-password] resend result:', JSON.stringify(resendResult))
 
   return NextResponse.json({ ok: true })
 }
