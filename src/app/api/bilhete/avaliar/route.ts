@@ -63,7 +63,10 @@ export async function POST(request: NextRequest) {
         { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
         {
           type: 'text',
-          text: `Extraia os jogos deste bilhete de apostas. Retorne APENAS JSON no formato:
+          text: `Extraia os jogos deste bilhete de apostas esportivas. Retorne APENAS JSON no formato abaixo.
+
+DATA DE HOJE: ${new Date().toISOString().split('T')[0]}
+
 {
   "total_odd": 8.50,
   "stake": 50.00,
@@ -74,12 +77,18 @@ export async function POST(request: NextRequest) {
       "selection": "Flamengo vence",
       "market": "match_winner",
       "odd": 1.80,
-      "match_date": "2026-05-25"
+      "match_date": "${new Date().toISOString().split('T')[0]}"
     }
   ]
 }
-Se não conseguir identificar stake ou total_odd, use null.
-market deve ser: match_winner | over_under | both_teams_score | handicap | corners | cards | correct_score | other`,
+
+REGRAS:
+- home_team é o time da CASA (listado primeiro no formato "Casa v Fora")
+- away_team é o time de FORA (listado segundo)
+- selection é O QUE O APOSTADOR APOSTOU (ex: "Wolfsburg vence", "Over 2.5", "Ambas marcam")
+- match_date: use a data visível no bilhete. Se não houver data explícita, use a data de hoje: ${new Date().toISOString().split('T')[0]}
+- Se não conseguir identificar stake ou total_odd, use null
+- market: match_winner | over_under | both_teams_score | handicap | corners | cards | correct_score | other`,
         },
       ],
     }],
@@ -95,6 +104,15 @@ market deve ser: match_winner | over_under | both_teams_score | handicap | corne
   }
 
   if (!ticketData.legs?.length) return NextResponse.json({ error: 'Nenhum jogo encontrado no bilhete.' }, { status: 400 })
+
+  // Garante datas válidas — fallback para hoje se Vision não extraiu data
+  const today = new Date().toISOString().split('T')[0]
+  ticketData.legs = ticketData.legs.map(leg => ({
+    ...leg,
+    match_date: leg.match_date && /^\d{4}-\d{2}-\d{2}$/.test(leg.match_date) ? leg.match_date : today,
+  }))
+
+  console.log('[avaliar] Vision extraiu:', JSON.stringify({ total_odd: ticketData.total_odd, legs: ticketData.legs.map(l => ({ home: l.home_team, away: l.away_team, date: l.match_date, sel: l.selection })) }))
 
   const bankroll = profile?.current_bankroll ?? 0
 
