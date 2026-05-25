@@ -4,9 +4,31 @@ import { sendPasswordResetEmail } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
 
+// Rate limit: max 3 tentativas por IP a cada 15 minutos
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now()
+  const entry = rateLimitMap.get(ip)
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + 15 * 60 * 1000 })
+    return true
+  }
+  if (entry.count >= 3) return false
+  entry.count++
+  return true
+}
+
 export async function POST(request: NextRequest) {
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+  if (!checkRateLimit(ip)) {
+    return NextResponse.json({ ok: true }) // Retorna ok para não revelar rate limit
+  }
+
   const { email } = await request.json()
-  if (!email) return NextResponse.json({ error: 'E-mail obrigatório' }, { status: 400 })
+  if (!email || typeof email !== 'string' || !email.includes('@')) {
+    return NextResponse.json({ ok: true })
+  }
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

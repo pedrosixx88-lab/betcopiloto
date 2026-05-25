@@ -60,12 +60,16 @@ export default async function AfiliadoPage() {
   const totalEarned = affiliate?.total_earned ?? 0
   const pendingPayout = affiliate?.pending_payout ?? 0
 
-  let decryptedPixKey: string | null = null
+  // Mascara a chave PIX — envia apenas os últimos 4 chars ao cliente
+  let maskedPixKey: string | null = null
+  let hasPixKey = false
   if (affiliate?.pix_key) {
+    hasPixKey = true
     try {
-      decryptedPixKey = decryptPixKey(affiliate.pix_key)
+      const full = decryptPixKey(affiliate.pix_key)
+      maskedPixKey = full.length > 4 ? '••••••••' + full.slice(-4) : '••••'
     } catch {
-      decryptedPixKey = null
+      maskedPixKey = null
     }
   }
 
@@ -131,7 +135,8 @@ export default async function AfiliadoPage() {
         <CardContent className="py-4 px-4">
           <SaqueForm
             pendingPayout={pendingPayout}
-            pixKey={decryptedPixKey}
+            pixKey={maskedPixKey}
+            hasPixKey={hasPixKey}
             pixKeyType={affiliate?.pix_key_type ?? null}
             activeReferrals={affiliate?.active_referrals ?? 0}
           />

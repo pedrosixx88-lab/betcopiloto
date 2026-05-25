@@ -12,7 +12,7 @@ function timingSafeEqual(a: string, b: string): boolean {
 }
 
 export async function GET(request: NextRequest) {
-  const secret = request.headers.get('x-cron-secret') ?? request.nextUrl.searchParams.get('secret')
+  const secret = request.headers.get('x-cron-secret')
   const expected = process.env.CRON_SECRET
   if (!expected || !secret || !timingSafeEqual(secret, expected)) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })

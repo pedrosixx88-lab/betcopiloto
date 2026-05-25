@@ -12,7 +12,8 @@ type PixKeyType = 'cpf' | 'email' | 'telefone' | 'aleatoria'
 
 interface Props {
   pendingPayout: number
-  pixKey: string | null
+  pixKey: string | null       // valor mascarado (••••1234) apenas para exibição
+  hasPixKey: boolean          // se já tem chave salva no banco
   pixKeyType: PixKeyType | null
   activeReferrals: number
 }
@@ -24,12 +25,12 @@ const PIX_TYPES: { value: PixKeyType; label: string; placeholder: string }[] = [
   { value: 'aleatoria', label: 'Chave aleatória', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
 ]
 
-export default function SaqueForm({ pendingPayout, pixKey: initialPixKey, pixKeyType: initialPixKeyType, activeReferrals }: Props) {
-  const [pixKey, setPixKey] = useState(initialPixKey ?? '')
+export default function SaqueForm({ pendingPayout, pixKey: maskedPixKey, hasPixKey, pixKeyType: initialPixKeyType, activeReferrals }: Props) {
+  const [pixKey, setPixKey] = useState('')  // sempre vazio — nunca pré-preenche com valor real
   const [pixKeyType, setPixKeyType] = useState<PixKeyType>(initialPixKeyType ?? 'cpf')
   const [savingPix, setSavingPix] = useState(false)
   const [requesting, setRequesting] = useState(false)
-  const [pixSaved, setPixSaved] = useState(!!initialPixKey)
+  const [pixSaved, setPixSaved] = useState(hasPixKey)
 
   async function handleSavePix() {
     if (!pixKey.trim()) { toast.error('Digite sua chave Pix'); return }
@@ -95,18 +96,19 @@ export default function SaqueForm({ pendingPayout, pixKey: initialPixKey, pixKey
         {/* Input */}
         <div className="flex gap-2">
           <Input
-            value={pixKey}
+            value={pixSaved ? (maskedPixKey ?? '') : pixKey}
             onChange={e => { setPixKey(e.target.value); setPixSaved(false) }}
-            placeholder={PIX_TYPES.find(t => t.value === pixKeyType)?.placeholder}
+            placeholder={pixSaved ? '' : PIX_TYPES.find(t => t.value === pixKeyType)?.placeholder}
+            readOnly={pixSaved}
             className="flex-1 text-sm"
           />
           <Button
-            onClick={handleSavePix}
-            disabled={savingPix || pixSaved}
+            onClick={pixSaved ? () => { setPixSaved(false); setPixKey('') } : handleSavePix}
+            disabled={savingPix}
             variant={pixSaved ? 'outline' : 'default'}
             className="shrink-0"
           >
-            {savingPix ? <Loader2 className="h-4 w-4 animate-spin" /> : pixSaved ? '✓ Salvo' : 'Salvar'}
+            {savingPix ? <Loader2 className="h-4 w-4 animate-spin" /> : pixSaved ? 'Alterar' : 'Salvar'}
           </Button>
         </div>
       </div>

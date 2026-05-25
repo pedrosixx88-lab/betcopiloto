@@ -6,7 +6,7 @@ import crypto from 'crypto'
 export const dynamic = 'force-dynamic'
 
 const MP_BASE = 'https://api.mercadopago.com'
-const PLAN_PRICE = 29.90
+const PLAN_PRICE = 49.90
 const AFFILIATE_COMMISSION_PCT = 0.30
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
