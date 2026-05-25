@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, BarChart3, Trophy, Ticket, Crown, Users, MoreHorizontal, X, LogOut } from 'lucide-react'
+import { LayoutDashboard, BarChart3, Trophy, Ticket, Crown, Users, MoreHorizontal, X, LogOut, ScanSearch } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -11,15 +11,17 @@ const NAV_ITEMS = [
   { href: '/dashboard', label: 'Início', icon: LayoutDashboard },
   { href: '/apostas', label: 'Apostas', icon: BarChart3 },
   { href: '/jogos', label: 'Jogos', icon: Trophy },
-  { href: '/bilhete', label: 'Bilhete', icon: Ticket },
+  { href: '/avaliar', label: 'Avaliar', icon: ScanSearch },
 ]
 
 const MORE_ITEMS = [
+  { href: '/bilhete', label: 'Bilhete', icon: Ticket },
   { href: '/planos', label: 'Planos', icon: Crown },
   { href: '/afiliado', label: 'Afiliados', icon: Users },
 ]
 
 const DESKTOP_EXTRA = [
+  { href: '/bilhete', label: 'Bilhete', icon: Ticket },
   { href: '/planos', label: 'Planos', icon: Crown },
   { href: '/afiliado', label: 'Afiliados', icon: Users },
 ]

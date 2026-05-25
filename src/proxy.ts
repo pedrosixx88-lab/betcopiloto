@@ -29,6 +29,9 @@ export async function proxy(request: NextRequest) {
   const publicRoutes = ['/', '/login', '/register', '/auth/callback', '/reset-password', '/update-password']
   const isPublic = publicRoutes.includes(pathname)
 
+  // Rota de login automático para testes locais
+  if (pathname === '/api/dev-login' && process.env.NODE_ENV === 'development') return NextResponse.next()
+
   // Webhook do Mercado Pago — sem autenticação
   if (pathname.startsWith('/api/webhook/')) return NextResponse.next()
 

@@ -20,17 +20,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Muitas requisições. Aguarde alguns minutos.' }, { status: 429 })
   }
 
-  // Gate: exclusivo Pro
+  // Gate: Pro ou 1 uso gratuito
   const { data: profile } = await supabase
     .from('profiles')
-    .select('plan, plan_expires_at, current_bankroll')
+    .select('plan, plan_expires_at, current_bankroll, avaliacoes_gratuitas')
     .eq('id', user.id)
-    .single<{ plan: string; plan_expires_at: string | null; current_bankroll: number }>()
+    .single<{ plan: string; plan_expires_at: string | null; current_bankroll: number; avaliacoes_gratuitas: number }>()
 
   const isPro = profile?.plan === 'pro' &&
     (!profile.plan_expires_at || new Date(profile.plan_expires_at) > new Date())
-  if (!isPro) {
-    return NextResponse.json({ error: 'upgrade_required', message: 'O avaliador de bilhete é exclusivo do plano Pro.' }, { status: 403 })
+  const avaliacoesUsadas = profile?.avaliacoes_gratuitas ?? 0
+
+  if (!isPro && avaliacoesUsadas >= 1) {
+    return NextResponse.json({ error: 'upgrade_required', message: 'Você já usou sua análise gratuita. Assine o Pro para continuar.' }, { status: 403 })
   }
 
   const formData = await request.formData()
@@ -346,6 +348,12 @@ Retorne APENAS este JSON (sem texto fora do JSON):
     if (!jsonMatch) throw new Error('Sem JSON na resposta')
 
     const analysis = JSON.parse(jsonMatch[0])
+
+    if (!isPro) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).from('profiles').update({ avaliacoes_gratuitas: avaliacoesUsadas + 1 }).eq('id', user.id)
+    }
+
     return NextResponse.json({ success: true, ticket: ticketData, analysis })
   } catch (err) {
     console.error('[bilhete/avaliar]', err instanceof Error ? err.message : String(err))
