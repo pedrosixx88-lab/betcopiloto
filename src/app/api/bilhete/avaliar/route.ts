@@ -771,14 +771,17 @@ REGRAS ABSOLUTAS:
 3. Para escanteios: use bloco "ESCANTEIOS — MÉDIAS REAIS". Para cartões: use bloco "CARTÕES — MÉDIAS REAIS"
 4. Se dados de escanteios/cartões forem indisponíveis, diga isso claramente no ponto correspondente
 
-FORMATO DOS PONTOS (campo "pontos"):
-- Gere 4 a 6 bullets curtos, cada um começando com um emoji relevante
-- Cada bullet: máximo 1 linha, direto ao ponto, com número real quando disponível
-- Emojis sugeridos por tipo de dado:
-  📊 probabilidade/edge  📋 tabela/posição  📉 forma recente  🔁 H2H
-  🤕 desfalques/lesões   ⚽ gols/xG         🟨 cartões         🚩 escanteios
-  ⚡ odds sharp          ✅ favorável        ❌ desfavorável
-- "veredicto": 1 frase ultra-curta tipo "Apostar com cautela" ou "Não apostar" ou "Boa aposta"
+FORMATO DOS PONTOS (campo "pontos") — OBRIGATÓRIO, nunca deixe vazio:
+- Gere SEMPRE 5 bullets, um por linha, cada um começando com emoji
+- Use números reais dos dados (%, posição, gols, jogos). Seja específico, não genérico
+- Exemplos de bullets bons:
+  "📊 Chance real de vitória: 45% — odd 2.00 implica 50% → sem valor (-5pp)"
+  "📋 16º na Bundesliga, 29pts, aproveitamento de 20% na temporada"
+  "📉 Forma fora de casa: 2V 4E 8D, sofrendo 2.2 gols por jogo"
+  "🔁 H2H: 3 vitórias, 2 empates — mas último jogo terminou 0x0"
+  "🤕 7 desfalques confirmados: Arnold, Dardai, Fischer e mais 4"
+- Emojis por tipo: 📊 probabilidade  📋 tabela  📉 forma  🔁 H2H  🤕 lesões  ⚽ gols  🚩 escanteios  🟨 cartões  ⚡ odds sharp
+- "veredicto": 1 frase curta e direta ex: "Não apostar — sem valor confirmado" ou "Boa aposta — edge positivo de +8pp"
 
 CONTEXTO DO APOSTADOR:
 Banca: R$ ${bankroll.toFixed(2)}

@@ -62,7 +62,7 @@ export default function AvaliarClient({ isPro, podeUsarGratis, avaliacoesUsadas 
   const [avaliando, setAvaliando] = useState(false)
   const [resultado, setResultado] = useState<AvaliacaoResult | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [expandedLeg, setExpandedLeg] = useState<number | null>(null)
+  const [expandedLeg, setExpandedLeg] = useState<number | null>(0)
   const [trialEsgotado, setTrialEsgotado] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -123,43 +123,36 @@ export default function AvaliarClient({ isPro, podeUsarGratis, avaliacoesUsadas 
         </div>
 
         {/* Resumo */}
-        <Card className={cn('border', r.tem_valor ? 'border-primary/30 bg-primary/5' : 'border-yellow-400/30 bg-yellow-400/5')}>
+        <Card className={cn('border', r.tem_valor ? 'border-primary/30 bg-primary/5' : 'border-destructive/30 bg-destructive/5')}>
           <CardContent className="py-4 px-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="text-center">
-                <p className="text-2xl font-bold">{r.nota_geral}</p>
-                <p className="text-xs text-muted-foreground">Nota</p>
+            {/* Nota + veredicto */}
+            <div className="flex items-center gap-3">
+              <div className="w-14 h-14 rounded-xl bg-background/60 flex flex-col items-center justify-center shrink-0">
+                <p className="text-2xl font-bold leading-none">{r.nota_geral?.split('/')[0]}</p>
+                <p className="text-[10px] text-muted-foreground">de 10</p>
               </div>
-              <div className="text-center">
-                <p className="text-sm font-semibold text-primary">{r.probabilidade_estimada}</p>
-                <p className="text-xs text-muted-foreground">Probabilidade</p>
-              </div>
-              <div className="text-center">
-                <p className={cn('text-sm font-semibold', r.tem_valor ? 'text-primary' : 'text-yellow-400')}>
-                  {r.tem_valor ? '✓ Tem valor' : '⚠ Sem valor'}
+              <div className="flex-1">
+                <p className="text-sm font-semibold leading-snug">{r.parecer}</p>
+                <p className={cn('text-xs font-medium mt-1', r.tem_valor ? 'text-primary' : 'text-destructive')}>
+                  {r.tem_valor ? '✓ Bilhete com valor' : '✗ Bilhete sem valor'}
+                  {r.odd_total ? ` · Odd ${r.odd_total}x` : ''}
                 </p>
-                <p className="text-xs text-muted-foreground">Odd {r.odd_total}x</p>
               </div>
             </div>
 
-            <p className="text-sm text-foreground/80 border-t border-border/40 pt-3">{r.parecer}</p>
-
-            <div className="grid grid-cols-4 gap-2 text-center text-xs">
+            {/* Placar das seleções */}
+            <div className="grid grid-cols-3 gap-2 text-center text-xs border-t border-border/30 pt-3">
               <div className="bg-primary/10 rounded-lg py-2">
-                <p className="text-primary font-bold text-lg">{r.jogos_favoraveis}</p>
-                <p className="text-muted-foreground">Favoráveis</p>
+                <p className="text-primary font-bold text-xl">{r.jogos_favoraveis}</p>
+                <p className="text-muted-foreground">✓ Favoráveis</p>
               </div>
               <div className="bg-yellow-400/10 rounded-lg py-2">
-                <p className="text-yellow-400 font-bold text-lg">{r.jogos_neutros}</p>
-                <p className="text-muted-foreground">Neutros</p>
+                <p className="text-yellow-400 font-bold text-xl">{r.jogos_neutros}</p>
+                <p className="text-muted-foreground">~ Neutras</p>
               </div>
               <div className="bg-destructive/10 rounded-lg py-2">
-                <p className="text-destructive font-bold text-lg">{r.jogos_desfavoraveis}</p>
-                <p className="text-muted-foreground">Desfav.</p>
-              </div>
-              <div className="bg-secondary rounded-lg py-2">
-                <p className="text-muted-foreground font-bold text-lg">{r.jogos_sem_dados}</p>
-                <p className="text-muted-foreground">Sem dados</p>
+                <p className="text-destructive font-bold text-xl">{r.jogos_desfavoraveis}</p>
+                <p className="text-muted-foreground">✗ Ruins</p>
               </div>
             </div>
           </CardContent>
