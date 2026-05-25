@@ -772,16 +772,18 @@ REGRAS ABSOLUTAS:
 4. Se dados de escanteios/cartões forem indisponíveis, diga isso claramente no ponto correspondente
 
 FORMATO DOS PONTOS (campo "pontos") — OBRIGATÓRIO, nunca deixe vazio:
-- Gere SEMPRE 5 bullets, um por linha, cada um começando com emoji
-- Use números reais dos dados (%, posição, gols, jogos). Seja específico, não genérico
-- Exemplos de bullets bons:
-  "📊 Chance real de vitória: 45% — odd 2.00 implica 50% → sem valor (-5pp)"
-  "📋 16º na Bundesliga, 29pts, aproveitamento de 20% na temporada"
-  "📉 Forma fora de casa: 2V 4E 8D, sofrendo 2.2 gols por jogo"
-  "🔁 H2H: 3 vitórias, 2 empates — mas último jogo terminou 0x0"
-  "🤕 7 desfalques confirmados: Arnold, Dardai, Fischer e mais 4"
-- Emojis por tipo: 📊 probabilidade  📋 tabela  📉 forma  🔁 H2H  🤕 lesões  ⚽ gols  🚩 escanteios  🟨 cartões  ⚡ odds sharp
-- "veredicto": 1 frase curta e direta ex: "Não apostar — sem valor confirmado" ou "Boa aposta — edge positivo de +8pp"
+- Gere SEMPRE 5 bullets, cada um começando com emoji
+- LINGUAGEM SIMPLES: escreva como se estivesse explicando para alguém que aposta por hobby, não para um analista profissional
+- PROIBIDO usar: edge, pp, H2H, Poisson, WDLLL, LLDDD, implícita, probabilidade implícita, xG, API
+- Em vez disso use: "chance real", "confrontos anteriores", "sequência de resultados", "gols esperados", "forma recente"
+- Exemplos de bullets CORRETOS:
+  "📊 A chance real de vitória é 45%, mas a odd de 2.00 pagaria como se fosse 50% — a aposta não compensa"
+  "📋 Time na 16ª posição com aproveitamento ruim na temporada (20% dos pontos possíveis)"
+  "📉 Nos últimos 5 jogos fora de casa: 2 vitórias, 4 empates e 8 derrotas — time em má fase"
+  "🔁 Confrontos anteriores: 3 vitórias, 2 empates — mas o último jogo terminou 0x0"
+  "🤕 7 jogadores importantes fora por lesão: Arnold, Dardai, Fischer e mais 4"
+- "veredicto": 1 frase simples ex: "Não vale a pena apostar" ou "Boa oportunidade" ou "Aposta arriscada"
+- "alerta": 1 frase curta sobre o maior risco, em linguagem simples — ou null
 
 CONTEXTO DO APOSTADOR:
 Banca: R$ ${bankroll.toFixed(2)}
@@ -825,14 +827,14 @@ Retorne APENAS este JSON (sem nenhum texto fora do JSON):
     "odd_total": 4.00,
     "tem_valor": true,
     "nota_geral": "7/10",
-    "parecer": "1 frase curta e direta: ex: 'Bilhete de alto risco — duas seleções sem valor, não recomendado.'"
+    "parecer": "1 frase simples e direta para o apostador, sem jargão. Ex: 'Bilhete arriscado — os dois times têm baixa chance de ganhar segundo os dados.' ou 'Boas seleções — os dados favorecem as duas apostas.'"
   },
   "gestao_banca": {
     "stake_sugerido": 25.00,
     "percentual_banca": "5%",
-    "raciocinio": "1 frase curta: ex: 'Edge negativo nas duas pernas — aposte no máximo 2% da banca se for seguir.'"
+    "raciocinio": "1 frase simples. Ex: 'Os dados não favorecem este bilhete — se for apostar mesmo assim, não coloque mais que R$X.' ou 'As seleções têm bom respaldo — apostar até R$X é razoável.'"
   },
-  "alertas_gerais": ["alertas críticos do bilhete inteiro — odds sharp divergentes, acúmulo de seleções desfavoráveis, banca em risco, etc."]
+  "alertas_gerais": ["máximo 3 alertas em linguagem simples. Ex: 'O time visitante chega com 7 jogadores lesionados para este jogo decisivo.' ou 'Nos confrontos anteriores, o time que você apostou nunca venceu.' — sem jargão técnico"]
 }`
 
   try {
