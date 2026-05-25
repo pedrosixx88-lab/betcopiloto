@@ -2,8 +2,10 @@ import Link from 'next/link'
 import { buttonVariants } from '@/components/ui/button'
 import {
   TrendingUp, Camera, Brain, Ticket, ChevronRight,
-  CheckCircle2, Star, Zap, BarChart3, Shield, Bell, MessageSquare, Target
+  CheckCircle2, Star, Zap, BarChart3, Shield, Bell, MessageSquare, Target, Smartphone
 } from 'lucide-react'
+
+const APK_URL = 'https://qwciyudbovdiadnxweac.supabase.co/storage/v1/object/public/downloads/BetCopiloto.apk'
 import { cn } from '@/lib/utils'
 
 const TESTIMONIALS = [
@@ -181,7 +183,19 @@ export default function LandingPage() {
               Ver planos
             </Link>
           </div>
-          <p className="animate-fade-up-delay-3 text-xs text-muted-foreground">Grátis para sempre · Sem cartão de crédito</p>
+
+          {/* Download APK */}
+          <div className="animate-fade-up-delay-3 flex flex-col items-center gap-2">
+            <a
+              href={APK_URL}
+              download="BetCopiloto.apk"
+              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-2 border-primary/30 text-primary hover:bg-primary/10 hover:border-primary/50')}
+            >
+              <Smartphone className="h-4 w-4" />
+              Baixar app para Android (.apk)
+            </a>
+            <p className="text-[11px] text-muted-foreground">Grátis para sempre · Sem cartão de crédito</p>
+          </div>
 
           {/* Dashboard mockup */}
           <div className="animate-fade-in mt-12 relative mx-auto max-w-3xl">
