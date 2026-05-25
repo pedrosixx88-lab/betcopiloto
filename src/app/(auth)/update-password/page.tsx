@@ -56,7 +56,8 @@ export default function UpdatePasswordPage() {
       return
     }
 
-    toast.success('Senha atualizada com sucesso!')
+    await supabase.auth.signOut()
+    toast.success('Senha atualizada! Faça login com a nova senha.')
     router.push('/login')
   }
 
