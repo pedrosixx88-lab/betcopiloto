@@ -18,7 +18,9 @@ interface LegAnalysis {
   odd: number
   avaliacao: 'FAVORÁVEL' | 'NEUTRO' | 'DESFAVORÁVEL' | 'DADOS INSUFICIENTES'
   confianca: string
-  justificativa: string
+  pontos: string[]
+  veredicto: string
+  justificativa?: string
   alerta: string | null
 }
 
@@ -186,8 +188,24 @@ export default function AvaliarClient({ isPro, podeUsarGratis, avaliacoesUsadas 
                   </CardContent>
                 </button>
                 {open && (
-                  <div className="px-4 pb-4 space-y-2 border-t border-border/30 pt-3">
-                    <p className="text-sm text-foreground/80">{leg.justificativa}</p>
+                  <div className="px-4 pb-4 space-y-3 border-t border-border/30 pt-3">
+                    {/* Veredicto */}
+                    {leg.veredicto && (
+                      <p className={cn('text-sm font-semibold', cfg.color)}>{leg.veredicto}</p>
+                    )}
+                    {/* Bullets */}
+                    {(leg.pontos?.length > 0) && (
+                      <ul className="space-y-1.5">
+                        {leg.pontos.map((ponto, j) => (
+                          <li key={j} className="text-sm text-foreground/80 leading-snug">{ponto}</li>
+                        ))}
+                      </ul>
+                    )}
+                    {/* Fallback texto antigo */}
+                    {!leg.pontos?.length && leg.justificativa && (
+                      <p className="text-sm text-foreground/80">{leg.justificativa}</p>
+                    )}
+                    {/* Alerta */}
                     {leg.alerta && (
                       <div className="flex items-start gap-2 bg-yellow-400/10 rounded-lg p-2.5">
                         <AlertTriangle className="h-3.5 w-3.5 text-yellow-400 shrink-0 mt-0.5" />

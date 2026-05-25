@@ -766,15 +766,19 @@ ${data.stats_jogo ? `▌ ESTATÍSTICAS DO JOGO (já encerrado)
   const prompt = `Você é um analista quantitativo de apostas esportivas, especialista em detecção de valor e gestão de banca. Analise este bilhete com profundidade usando EXCLUSIVAMENTE os dados reais abaixo.
 
 REGRAS ABSOLUTAS:
-1. Use APENAS números e dados presentes nos blocos abaixo — NUNCA invente estatísticas
-2. Para cada jogo, calcule e explique o EDGE (diferença entre prob real e prob implícita na odd)
-3. Avalie a seleção específica do apostador à luz dos dados do mercado (casas sharp como Pinnacle)
-4. Se Pinnacle ou outra casa sharp tiver odd MUITO diferente da odd do apostador, isso é sinal forte
-5. "DADOS INSUFICIENTES" somente se previsão, tabela, forma E médias de jogo estiverem TODOS indisponíveis
-6. Para mercados de ESCANTEIOS: use os blocos "ESCANTEIOS — MÉDIAS REAIS" — cite as médias exatas de cada time e o total esperado combinado. Compare com a linha proposta pelo apostador.
-7. Para mercados de CARTÕES: use os blocos "CARTÕES — MÉDIAS REAIS" e "temporada inteira" — cite médias por jogo e total esperado combinado.
-8. Para mercados de GOLS/OVER/UNDER: use xG médio, médias de gols marcados/sofridos da forma, e gols esperados do Poisson.
-9. Se os dados de escanteios/cartões estiverem indisponíveis para um mercado específico, diga explicitamente "dados insuficientes para este mercado" — nunca estime.
+1. Use APENAS dados dos blocos abaixo — NUNCA invente estatísticas
+2. "DADOS INSUFICIENTES" somente se previsão, tabela, forma E médias estiverem TODOS indisponíveis
+3. Para escanteios: use bloco "ESCANTEIOS — MÉDIAS REAIS". Para cartões: use bloco "CARTÕES — MÉDIAS REAIS"
+4. Se dados de escanteios/cartões forem indisponíveis, diga isso claramente no ponto correspondente
+
+FORMATO DOS PONTOS (campo "pontos"):
+- Gere 4 a 6 bullets curtos, cada um começando com um emoji relevante
+- Cada bullet: máximo 1 linha, direto ao ponto, com número real quando disponível
+- Emojis sugeridos por tipo de dado:
+  📊 probabilidade/edge  📋 tabela/posição  📉 forma recente  🔁 H2H
+  🤕 desfalques/lesões   ⚽ gols/xG         🟨 cartões         🚩 escanteios
+  ⚡ odds sharp          ✅ favorável        ❌ desfavorável
+- "veredicto": 1 frase ultra-curta tipo "Apostar com cautela" ou "Não apostar" ou "Boa aposta"
 
 CONTEXTO DO APOSTADOR:
 Banca: R$ ${bankroll.toFixed(2)}
@@ -796,9 +800,16 @@ Retorne APENAS este JSON (sem nenhum texto fora do JSON):
       "prob_real": "X% (da API)",
       "prob_implicita_odd": "X% (da odd do apostador)",
       "edge": "+Xpp (há valor) OU -Xpp (sem valor)",
-      "justificativa": "4-5 frases densas usando dados REAIS: cite % exatos, posição na tabela, forma, H2H, médias de gols, comparação com Pinnacle/sharp. Explique por que há ou não valor nesta odd específica.",
-      "alerta": "alerta crítico específico — desfalques, H2H contrário, odds sharp divergentes, time em crise — ou null",
-      "valor_detectado": true
+      "pontos": [
+        "📊 Probabilidade real: 45% vs implícita da odd: 50% → edge -5pp (sem valor)",
+        "📋 Tabela: 16º lugar, 29pts, aproveitamento 20%, ameaçado de rebaixamento",
+        "📉 Forma: 2V 4E 8D fora de casa na temporada, sofrendo 2.2 gols/jogo",
+        "🔁 H2H: 3 vitórias, 2 empates, 0 derrotas — mas último jogo terminou 0x0",
+        "🤕 Desfalques: Arnold, Dardai, Fischer, Rogerio, Seelt, Wimmer, Wind (7 fora)"
+      ],
+      "veredicto": "Não apostar — odd sem valor e time em má fase",
+      "alerta": "alerta crítico em 1 frase curta — ou null",
+      "valor_detectado": false
     }
   ],
   "resumo": {
@@ -811,12 +822,12 @@ Retorne APENAS este JSON (sem nenhum texto fora do JSON):
     "odd_total": 4.00,
     "tem_valor": true,
     "nota_geral": "7/10",
-    "parecer": "4-5 frases sobre o bilhete completo: qualidade das seleções, edge detectado, riscos principais, recomendação final clara (apostar / não apostar / apostar com stake reduzido)"
+    "parecer": "1 frase curta e direta: ex: 'Bilhete de alto risco — duas seleções sem valor, não recomendado.'"
   },
   "gestao_banca": {
     "stake_sugerido": 25.00,
     "percentual_banca": "5%",
-    "raciocinio": "baseado no edge detectado, qualidade das seleções, odd total e banca disponível. Use critério de Kelly parcial se tiver edge positivo."
+    "raciocinio": "1 frase curta: ex: 'Edge negativo nas duas pernas — aposte no máximo 2% da banca se for seguir.'"
   },
   "alertas_gerais": ["alertas críticos do bilhete inteiro — odds sharp divergentes, acúmulo de seleções desfavoráveis, banca em risco, etc."]
 }`
