@@ -986,19 +986,27 @@ REGRAS ABSOLUTAS:
   * LESÕES vazias + ESCALAÇÃO não confirmada → "escalações ainda não confirmadas, sem desfalques registrados"
 - ESTA REGRA SOBREPÕE TUDO: prefira "não há esse dado disponível" honesto a inventar um número.
 
-SUGESTÕES ALTERNATIVAS (campo "alternativas") — APENAS QUANDO avaliacao = DESFAVORÁVEL ou NEUTRO:
-- Sugira de 1 a 3 mercados alternativos que tenham MAIS chance de acerto, baseados nos dados reais
-- USE APENAS as odds do bloco "ODDS DE MERCADO" — NUNCA invente odds
-- Regras OBRIGATÓRIAS (NÃO sugerir se a regra não for satisfeita):
-  * "Dupla chance 1X" (casa ou empate): só se odd média 1X disponível E (Tabela do time casa: aproveitamento ≥45% OU forma últimos 5 da casa ≥2V)
-  * "Dupla chance X2" (empate ou fora): só se odd média X2 disponível E (Tabela do time fora: aproveitamento ≥45% OU forma últimos 5 do fora ≥2V)
-  * "Over X.5 escanteios" totais: só se (média_pro_casa + média_pro_fora dos últimos 5 jogos) ≥ X + 2.0
-  * "Ambas marcam — Sim": só se BTTS% nas últimas 10 partidas de AMBOS os times ≥60% E média gols H2H ≥ 2.0
-  * "Over 1.5 gols": só se gols esperados Poisson (casa+fora) ≥ 2.8
-  * "Over 2.5 gols": só se gols esperados Poisson (casa+fora) ≥ 3.2
-- Cada alternativa deve ter raciocínio com NÚMEROS específicos dos dados ("forma 4V1E", "média 6.2 escanteios/jogo cada time", etc.)
-- Se NENHUMA regra for satisfeita, retorne "alternativas": []
-- Se avaliacao = FAVORÁVEL, retorne "alternativas": []
+SUGESTÕES ALTERNATIVAS (campo "alternativas"):
+- avaliacao = DESFAVORÁVEL → OBRIGATÓRIO tentar sugerir 1 a 3 apostas mais seguras para o mesmo jogo
+- avaliacao = NEUTRO → sugerir se houver mercado claramente melhor com dados que apoiem
+- avaliacao = FAVORÁVEL → retorne sempre "alternativas": []
+- USE APENAS dados dos blocos fornecidos. Para odd_aproximada, use valores do bloco "ODDS DE MERCADO" se disponíveis; caso contrário, use null
+
+Candidatos — analise quais se aplicam e cite os números:
+  * "Dupla chance 1X" (casa ou empate): se time da casa tem ≥40% aproveitamento na forma recente OU ≥40% na temporada
+  * "Dupla chance X2" (empate ou fora): se time de fora tem ≥40% aproveitamento na forma recente OU ≥40% na temporada
+  * "Ambas marcam — Sim": se BTTS ≥50% nos últimos jogos de qualquer dos dois times OU gols esperados Poisson (casa+fora) ≥ 2.5
+  * "Ambas marcam — Não": se ambos os times marcam menos de 1 gol/jogo nos últimos 5 jogos cada
+  * "Over 1.5 gols": se gols esperados Poisson (casa+fora) ≥ 2.3 OU média gols recente dos dois times ≥ 1.3 cada
+  * "Over 2.5 gols": se gols esperados Poisson ≥ 2.8 OU H2H com média gols ≥ 2.5 em ≥3 jogos
+  * "Under 2.5 gols": se gols esperados Poisson ≤ 2.0 E ambos os times marcam pouco (≤1 gol/jogo)
+  * Vitória do time favorito apontado pelo Poisson: se favorito tem >55% de chance E esta opção ainda não foi apostada no bilhete
+
+Formato OBRIGATÓRIO de cada item em "alternativas":
+  { "selecao": "Dupla chance 1X", "mercado": "double_chance", "odd_aproximada": 1.40, "raciocinio": "Time da casa venceu 3 dos últimos 5 jogos (60% aproveitamento); dupla chance cobre vitória + empate" }
+
+Raciocínio DEVE citar números exatos dos dados (ex: "forma 3V 1E 1D nos últimos 5", "Poisson aponta 2.8 gols esperados").
+Retorne "alternativas": [] SOMENTE se não houver absolutamente nenhum dado disponível para embasar qualquer sugestão.
 
 FORMATO DOS PONTOS (campo "pontos") — OBRIGATÓRIO, sempre 5 bullets com emoji:
 - LINGUAGEM SIMPLES: explique para um apostador de hobby, não para analista profissional
@@ -1025,23 +1033,30 @@ Retorne APENAS este JSON (sem nenhum texto fora do JSON, sem markdown, sem code 
     {
       "jogo": "Time A vs Time B",
       "selecao": "seleção exata do apostador",
-      "odd": 2.00,
-      "avaliacao": "FAVORÁVEL",
-      "confianca": "alta",
-      "prob_real": "55%",
-      "prob_implicita_odd": "50%",
-      "edge": "+5pp",
+      "odd": 3.50,
+      "avaliacao": "DESFAVORÁVEL",
+      "confianca": "baixa",
+      "prob_real": "22%",
+      "prob_implicita_odd": "28%",
+      "edge": "-6pp",
       "pontos": [
-        "📊 A chance real de vitória é 55%, e a odd 2.00 paga como se fosse 50% — vale a aposta",
-        "📋 Time líder da tabela com 70% de aproveitamento na temporada",
-        "📈 Últimos 5 jogos em casa: 4 vitórias e 1 empate, marcando 2.4 gols por jogo",
-        "🔁 Confrontos anteriores: venceu 4 dos últimos 5, com média 2.8 gols por jogo",
-        "🤕 Sem desfalques importantes registrados"
+        "📊 A chance real é de apenas 22%, mas a odd 3.50 exige 28% para valer — não há vantagem",
+        "📋 Time visitante está em 12º lugar com 35% de aproveitamento na temporada",
+        "📈 Últimos 5 jogos fora: 1 vitória, 1 empate e 3 derrotas",
+        "🔁 Confrontos anteriores: perdeu 3 dos últimos 4 jogos contra este adversário",
+        "🤕 Atacante titular suspenso para esta partida"
       ],
-      "veredicto": "Boa oportunidade — dados favorecem fortemente esta aposta",
-      "alerta": null,
-      "valor_detectado": true,
-      "alternativas": []
+      "veredicto": "Não vale a pena — a chance é baixa e a odd não compensa o risco",
+      "alerta": "Time de fora chega desgastado com 3 derrotas seguidas fora de casa",
+      "valor_detectado": false,
+      "alternativas": [
+        {
+          "selecao": "Dupla chance 1X",
+          "mercado": "double_chance",
+          "odd_aproximada": 1.35,
+          "raciocinio": "Time da casa ganhou 3 dos últimos 5 jogos em casa (60% aproveit.); dupla chance cobre vitória + empate com muito mais segurança"
+        }
+      ]
     }
   ],
   "resumo": {
