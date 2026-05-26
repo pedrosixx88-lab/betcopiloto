@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { rateLimit } from '@/lib/rate-limit'
 import {
   searchFixture,
@@ -16,7 +17,48 @@ import {
   getFixtureOdds,
 } from '@/lib/api-football'
 
+// Permite até 60s no Vercel Hobby — análise faz muitas chamadas paralelas
+export const maxDuration = 60
+
+// Web search opcional — desabilitado por padrão (ativar via env var quando habilitado na API key)
+const WEB_SEARCH_ENABLED = process.env.ENABLE_WEB_SEARCH === 'true'
+
+async function buscarNoticias(anthropic: Anthropic, homeTeam: string, awayTeam: string): Promise<string> {
+  if (!WEB_SEARCH_ENABLED) return ''
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 4000)
+  try {
+    const res = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 400,
+      tools: [{ type: 'web_search_20250305' as any, name: 'web_search' }],
+      messages: [{
+        role: 'user',
+        content: `Notícias últimas 48h sobre ${homeTeam} x ${awayTeam} futebol. Foco: lesões/suspensões, declarações do técnico. 3 bullets curtos.`,
+      }],
+    }, { signal: controller.signal })
+    clearTimeout(timeoutId)
+    const textBlock = (res as any).content?.find((c: any) => c.type === 'text')
+    return textBlock?.text?.substring(0, 600) ?? ''
+  } catch (e: any) {
+    clearTimeout(timeoutId)
+    console.warn('[buscarNoticias] erro:', e?.message ?? e)
+    return ''
+  }
+}
+
 export async function POST(request: NextRequest) {
+  try {
+    return await handlePOST(request)
+  } catch (err: any) {
+    const msg = err?.message ?? String(err)
+    const stack = err?.stack ?? ''
+    console.error('[bilhete/avaliar] UNCAUGHT:', msg, stack)
+    return NextResponse.json({ error: `Erro interno: ${msg}` }, { status: 500 })
+  }
+}
+
+async function handlePOST(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
@@ -25,11 +67,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Muitas requisições. Aguarde alguns minutos.' }, { status: 429 })
   }
 
-  const { data: profile } = await supabase
+  const supabaseAdmin = createAdminClient()
+  const { data: profile } = await (supabaseAdmin as any)
     .from('profiles')
     .select('plan, plan_expires_at, current_bankroll, avaliacoes_gratuitas')
     .eq('id', user.id)
-    .single<{ plan: string; plan_expires_at: string | null; current_bankroll: number; avaliacoes_gratuitas: number }>()
+    .single()
 
   const isPro = profile?.plan === 'pro' &&
     (!profile.plan_expires_at || new Date(profile.plan_expires_at) > new Date())
@@ -70,6 +113,7 @@ DATA DE HOJE: ${hoje}
 {
   "total_odd": 4.00,
   "stake": 50.00,
+  "retorno_real": 200.00,
   "legs": [
     {
       "home_team": "Flamengo",
@@ -88,6 +132,7 @@ REGRAS:
 - selection: o que o apostador apostou exatamente (ex: "Wolfsburg vence", "Over 2.5", "Ambas marcam - Sim")
 - match_date: data visível no bilhete. Se não houver, use hoje: ${hoje}
 - stake e total_odd: null se não identificar
+- retorno_real: valor exato mostrado como "Retornos Potenciais", "Retorno Total", "Possível Retorno" ou similar no bilhete. INCLUI boosts/aumentos. Use null se não houver texto explícito de retorno
 - market: match_winner | over_under | both_teams_score | handicap | corners | cards | correct_score | other`,
         },
       ],
@@ -98,7 +143,7 @@ REGRAS:
   const extractMatch = extractText.match(/\{[\s\S]*\}/)
   if (!extractMatch) return NextResponse.json({ error: 'Não consegui ler o bilhete. Tente uma foto mais nítida.' }, { status: 400 })
 
-  let ticketData: { total_odd: number | null; stake: number | null; legs: Array<{ home_team: string; away_team: string; selection: string; market: string; odd: number; match_date: string }> }
+  let ticketData: { total_odd: number | null; stake: number | null; retorno_real: number | null; legs: Array<{ home_team: string; away_team: string; selection: string; market: string; odd: number; match_date: string }> }
   try { ticketData = JSON.parse(extractMatch[0]) } catch {
     return NextResponse.json({ error: 'Erro ao processar bilhete.' }, { status: 400 })
   }
@@ -140,47 +185,153 @@ REGRAS:
 
         console.log(`[avaliar] ENCONTRADO: ${fixture.teams.home.name} vs ${fixture.teams.away.name} | id=${fid} | liga=${fixture.league.name} | temp=${temporada}`)
 
-        const [
-          predRes, lineupsRes, lesionsRes, statsJogoRes,
-          tabelaRes, h2hRes, statsHomeRes, statsAwayRes,
-          formaHomeRes, formaAwayRes, oddsRes,
-        ] = await Promise.allSettled([
-          getFixturePredictions(fid),
-          getFixtureLineups(fid),
-          getFixtureInjuries(fid),
-          getFixtureStats(fid),
-          getStandings(leagueId, temporada),
-          getH2H(homeId, awayId),
-          getTeamSeasonStats(homeId, leagueId, temporada),
-          getTeamSeasonStats(awayId, leagueId, temporada),
-          getLastMatches(homeId, 10),
-          getLastMatches(awayId, 10),
-          getFixtureOdds(fid),
+        let pred: any, escalacoes: any[], lesoes: any[], statsJogo: any[]
+        let tabelaRaw: any[], h2hRaw: any[], statsHome: any, statsAway: any
+        let formaHomeRaw: any[], formaAwayRaw: any[], oddsRaw: any[]
+        let noticias = ''
+
+        // Dados dinâmicos: sempre frescos — mudam a cada rodada (tabela, forma, H2H, odds)
+        // NÃO cachear: se cacheado antes de um jogo ser disputado, o H2H/forma ficam desatualizados
+        const [freshResults, noticiasText] = await Promise.all([
+          Promise.allSettled([
+            getStandings(leagueId, temporada),
+            getH2H(homeId, awayId),
+            getTeamSeasonStats(homeId, leagueId, temporada),
+            getTeamSeasonStats(awayId, leagueId, temporada),
+            getLastMatches(homeId, 15),
+            getLastMatches(awayId, 15),
+            getFixtureOdds(fid),
+          ]),
+          buscarNoticias(anthropic, leg.home_team, leg.away_team),
         ])
+        const [tabelaRes, h2hRes, statsHomeRes, statsAwayRes, formaHomeRes, formaAwayRes, oddsRes] = freshResults
+        tabelaRaw = tabelaRes.status === 'fulfilled' ? (tabelaRes.value ?? []) : []
+        h2hRaw = h2hRes.status === 'fulfilled' ? (h2hRes.value ?? []) : []
+        statsHome = statsHomeRes.status === 'fulfilled' ? (statsHomeRes.value ?? null) : null
+        statsAway = statsAwayRes.status === 'fulfilled' ? (statsAwayRes.value ?? null) : null
+        formaHomeRaw = formaHomeRes.status === 'fulfilled' ? (formaHomeRes.value ?? []) : []
+        formaAwayRaw = formaAwayRes.status === 'fulfilled' ? (formaAwayRes.value ?? []) : []
+        oddsRaw = oddsRes.status === 'fulfilled' ? (oddsRes.value ?? []) : []
+        noticias = noticiasText
+        console.log(`[avaliar] H2H(${homeId}-${awayId}): ${h2hRaw.length} confrontos | tabela=${tabelaRaw.length} | formaH=${formaHomeRaw.length} formaA=${formaAwayRaw.length}`)
 
-        const pred = predRes.status === 'fulfilled' ? (predRes.value ?? null) : null
-        const escalacoes = lineupsRes.status === 'fulfilled' ? (lineupsRes.value ?? []) : []
-        const lesoes = lesionsRes.status === 'fulfilled' ? (lesionsRes.value ?? []) : []
-        const statsJogo = statsJogoRes.status === 'fulfilled' ? (statsJogoRes.value ?? []) : []
-        const tabelaRaw = tabelaRes.status === 'fulfilled' ? (tabelaRes.value ?? []) : []
-        const h2hRaw = h2hRes.status === 'fulfilled' ? (h2hRes.value ?? []) : []
-        const statsHome = statsHomeRes.status === 'fulfilled' ? (statsHomeRes.value ?? null) : null
-        const statsAway = statsAwayRes.status === 'fulfilled' ? (statsAwayRes.value ?? null) : null
-        const formaHomeRaw = formaHomeRes.status === 'fulfilled' ? (formaHomeRes.value ?? []) : []
-        const formaAwayRaw = formaAwayRes.status === 'fulfilled' ? (formaAwayRes.value ?? []) : []
-        const oddsRaw = oddsRes.status === 'fulfilled' ? (oddsRes.value ?? []) : []
+        // Dados estáticos: cachear 6h — pred/Poisson, escalações, lesões, stats do jogo encerrado
+        let cachedFixture: any = null
+        try {
+          const cacheRes = await (supabaseAdmin as any)
+            .from('fixture_cache')
+            .select('data, cached_at')
+            .eq('fixture_id', fid)
+            .maybeSingle()
+          cachedFixture = cacheRes?.data ?? null
+        } catch (e: any) {
+          console.warn('[avaliar] cache read falhou:', e?.message ?? e)
+        }
 
-        console.log(`[avaliar] dados: pred=${!!pred} escal=${escalacoes.length} lesoes=${lesoes.length} tabela=${tabelaRaw.length} h2h=${h2hRaw.length} hStats=${!!statsHome} aStats=${!!statsAway} hForma=${formaHomeRaw.length} aForma=${formaAwayRaw.length} odds=${oddsRaw.length}`)
+        const cacheHit = cachedFixture &&
+          (Date.now() - new Date(cachedFixture.cached_at).getTime()) < 6 * 60 * 60 * 1000
 
-        // ── Tabela ──
+        if (cacheHit) {
+          pred = cachedFixture.data.pred
+          escalacoes = cachedFixture.data.escalacoes
+          lesoes = cachedFixture.data.lesoes
+          statsJogo = cachedFixture.data.statsJogo
+          console.log(`[avaliar] cache HIT (pred/escal/lesoes): fixture ${fid}`)
+        } else {
+          const [predRes, lineupsRes, lesionsRes, statsJogoRes] = await Promise.allSettled([
+            getFixturePredictions(fid),
+            getFixtureLineups(fid),
+            getFixtureInjuries(fid),
+            getFixtureStats(fid),
+          ])
+          pred = predRes.status === 'fulfilled' ? (predRes.value ?? null) : null
+          escalacoes = lineupsRes.status === 'fulfilled' ? (lineupsRes.value ?? []) : []
+          lesoes = lesionsRes.status === 'fulfilled' ? (lesionsRes.value ?? []) : []
+          statsJogo = statsJogoRes.status === 'fulfilled' ? (statsJogoRes.value ?? []) : []
+
+          try {
+            await (supabaseAdmin as any).from('fixture_cache').upsert({
+              fixture_id: fid,
+              data: { pred, escalacoes, lesoes, statsJogo },
+              cached_at: new Date().toISOString(),
+            })
+          } catch (e: any) {
+            console.warn('[avaliar] cache write falhou:', e?.message ?? e)
+          }
+        }
+
+        console.log(`[avaliar] dados: pred=${!!pred} escal=${escalacoes.length} lesoes=${lesoes.length} h2h=${h2hRaw.length} hStats=${!!statsHome} aStats=${!!statsAway} hForma=${formaHomeRaw.length} aForma=${formaAwayRaw.length} odds=${oddsRaw.length} cache=${cacheHit}`)
+
+        // ── Tabela: primeiro /standings, depois fallback via /teams/statistics ──
         const todosClassificados: any[] = []
         tabelaRaw.forEach((grupo: any) => {
           if (Array.isArray(grupo)) todosClassificados.push(...grupo)
           else if (grupo?.league?.standings) grupo.league.standings.forEach((s: any[]) => todosClassificados.push(...s))
           else if (grupo?.standings) grupo.standings.forEach((s: any[]) => todosClassificados.push(...s))
         })
-        const posHome = todosClassificados.find((s: any) => s.team?.id === homeId)
-        const posAway = todosClassificados.find((s: any) => s.team?.id === awayId)
+        let posHome: any = todosClassificados.find((s: any) => s.team?.id === homeId)
+        let posAway: any = todosClassificados.find((s: any) => s.team?.id === awayId)
+
+        // Fallback: constrói entrada de tabela a partir de stats da temporada
+        const tabelaFromStats = (ts: any, teamName: string, ehCasa: boolean) => {
+          if (!ts?.fixtures) return null
+          const f = ts.fixtures, g = ts.goals
+          const loc = ehCasa ? 'home' : 'away'
+          const pontos = 3 * (f.wins?.total ?? 0) + (f.draws?.total ?? 0)
+          return {
+            team: { id: ehCasa ? homeId : awayId, name: teamName },
+            rank: null,
+            points: pontos,
+            form: ts.form ?? null,
+            description: null,
+            all: {
+              played: f.played?.total ?? 0,
+              win: f.wins?.total ?? 0,
+              draw: f.draws?.total ?? 0,
+              lose: f.loses?.total ?? 0,
+              goals: { for: g?.for?.total?.total ?? 0, against: g?.against?.total?.total ?? 0 },
+            },
+            home: ehCasa ? {
+              played: f.played?.[loc] ?? 0, win: f.wins?.[loc] ?? 0,
+              draw: f.draws?.[loc] ?? 0, lose: f.loses?.[loc] ?? 0,
+              goals: { for: g?.for?.total?.[loc] ?? 0, against: g?.against?.total?.[loc] ?? 0 },
+            } : null,
+            away: !ehCasa ? {
+              played: f.played?.[loc] ?? 0, win: f.wins?.[loc] ?? 0,
+              draw: f.draws?.[loc] ?? 0, lose: f.loses?.[loc] ?? 0,
+              goals: { for: g?.for?.total?.[loc] ?? 0, against: g?.against?.total?.[loc] ?? 0 },
+            } : null,
+            _fallback: true,
+          }
+        }
+
+        if (!posHome) posHome = tabelaFromStats(statsHome, fixture.teams.home.name, true)
+        if (!posAway) posAway = tabelaFromStats(statsAway, fixture.teams.away.name, false)
+
+        // 3ª camada: constrói "tabela" a partir dos últimos jogos (forma recente)
+        const tabelaFromForma = (formaRaw: any[], teamId: number, teamName: string) => {
+          if (!formaRaw || formaRaw.length === 0) return null
+          let w = 0, d = 0, l = 0, gf = 0, ga = 0, total = 0
+          for (const m of formaRaw) {
+            const isHome = m.teams?.home?.id === teamId
+            const tg = isHome ? m.goals?.home : m.goals?.away
+            const og = isHome ? m.goals?.away : m.goals?.home
+            if (typeof tg === 'number' && typeof og === 'number') {
+              total++; gf += tg; ga += og
+              if (tg > og) w++; else if (tg < og) l++; else d++
+            }
+          }
+          if (total === 0) return null
+          return {
+            team: { id: teamId, name: teamName },
+            rank: null, points: 3 * w + d, form: null, description: null,
+            all: { played: total, win: w, draw: d, lose: l, goals: { for: gf, against: ga } },
+            home: null, away: null,
+            _fallback: true, _fromForma: total,
+          }
+        }
+        if (!posHome) posHome = tabelaFromForma(formaHomeRaw, homeId, fixture.teams.home.name)
+        if (!posAway) posAway = tabelaFromForma(formaAwayRaw, awayId, fixture.teams.away.name)
 
         // ── Escalações ──
         const escHome = escalacoes.find((l: any) => l.team?.id === homeId)
@@ -438,22 +589,56 @@ REGRAS:
         const mwDrawAvg = avg(mw?.draw ?? [])
         const mwAwayAvg = avg(mw?.away ?? [])
 
-        // Detecção de valor: probabilidade implícita da odd do apostador vs prob real da API
-        const probRealAPI = (() => {
-          const p = pred?.predictions?.percent
-          if (!p) return null
+        // Detecção de valor: prob da API (Poisson) OU fallback média do mercado (14+ casas)
+        const probInfo: { value: number; source: string } | null = (() => {
           const legSel = leg.selection.toLowerCase()
-          if (leg.market === 'match_winner') {
-            if (legSel.includes(fixture.teams.home.name.toLowerCase()) || legSel.includes('casa') || legSel === '1')
-              return parseFloat(p.home?.replace('%', '') ?? '0')
-            if (legSel.includes(fixture.teams.away.name.toLowerCase()) || legSel.includes('fora') || legSel === '2')
-              return parseFloat(p.away?.replace('%', '') ?? '0')
-            if (legSel.includes('empate') || legSel === 'x')
-              return parseFloat(p.draw?.replace('%', '') ?? '0')
+          const isHome = legSel.includes(fixture.teams.home.name.toLowerCase()) || legSel.includes('casa') || legSel === '1'
+          const isAway = legSel.includes(fixture.teams.away.name.toLowerCase()) || legSel.includes('fora') || legSel === '2'
+          const isDraw = legSel.includes('empate') || legSel === 'x'
+
+          // 1ª opção: prediction Poisson da API-Football
+          const p = pred?.predictions?.percent
+          if (p && leg.market === 'match_winner') {
+            if (isHome) return { value: parseFloat(p.home?.replace('%', '') ?? '0'), source: 'Poisson (API)' }
+            if (isAway) return { value: parseFloat(p.away?.replace('%', '') ?? '0'), source: 'Poisson (API)' }
+            if (isDraw) return { value: parseFloat(p.draw?.replace('%', '') ?? '0'), source: 'Poisson (API)' }
           }
+
+          // 2ª opção: média implícita das casas de aposta (14+ casas) — fonte real, não inventada
+          if (leg.market === 'match_winner' && mw) {
+            if (isHome && mwHomeAvg && mwHomeAvg > 1) return { value: 100 / mwHomeAvg, source: 'média de mercado (14+ casas)' }
+            if (isAway && mwAwayAvg && mwAwayAvg > 1) return { value: 100 / mwAwayAvg, source: 'média de mercado (14+ casas)' }
+            if (isDraw && mwDrawAvg && mwDrawAvg > 1) return { value: 100 / mwDrawAvg, source: 'média de mercado (14+ casas)' }
+          }
+
+          // 3ª opção: taxa de vitória dos últimos jogos (forma recente) — sempre tem dados se há jogos
+          if (leg.market === 'match_winner' && posHome?.all?.played && posAway?.all?.played) {
+            const hPlayed = posHome.all.played
+            const aPlayed = posAway.all.played
+            if (hPlayed > 0 && aPlayed > 0) {
+              const hWin = (posHome.all.win ?? 0) / hPlayed
+              const aWin = (posAway.all.win ?? 0) / aPlayed
+              const sumRates = hWin + aWin
+              if (sumRates > 0) {
+                const drawBase = 0.25
+                const remaining = 1 - drawBase
+                const homeProb = (hWin / sumRates) * remaining * 100
+                const awayProb = (aWin / sumRates) * remaining * 100
+                const sourceLabel = posHome._fromForma
+                  ? `taxa de vitória dos últimos ${posHome._fromForma}+${posAway._fromForma ?? aPlayed} jogos`
+                  : 'taxa de vitória da temporada'
+                if (isHome) return { value: homeProb, source: sourceLabel }
+                if (isAway) return { value: awayProb, source: sourceLabel }
+                if (isDraw) return { value: drawBase * 100, source: sourceLabel }
+              }
+            }
+          }
+
           return null
         })()
 
+        const probRealAPI = probInfo?.value ?? null
+        const probSource = probInfo?.source ?? null
         const probImplicitaOdd = leg.odd > 1 ? (1 / leg.odd * 100) : null
         const temValor = probRealAPI && probImplicitaOdd ? probRealAPI > probImplicitaOdd : null
 
@@ -465,6 +650,7 @@ REGRAS:
 
         return {
           leg,
+          noticias,
           fixture: {
             id: fid,
             home: fixture.teams.home.name,
@@ -475,6 +661,7 @@ REGRAS:
           },
           analise_valor: {
             prob_real_api: probRealAPI ? `${probRealAPI.toFixed(1)}%` : 'N/D',
+            prob_fonte: probSource ?? 'sem fonte',
             prob_implicita_odd: probImplicitaOdd ? `${probImplicitaOdd.toFixed(1)}%` : 'N/D',
             tem_valor: temValor,
             edge: probRealAPI && probImplicitaOdd ? `${(probRealAPI - probImplicitaOdd).toFixed(1)}pp` : 'N/D',
@@ -516,14 +703,15 @@ REGRAS:
                 saldo: (posHome.all?.goals?.for ?? 0) - (posHome.all?.goals?.against ?? 0),
                 forma: posHome.form,
                 status: posHome.description ?? null,
-                em_casa: {
+                fonte: posHome._fromForma ? `últimos ${posHome._fromForma} jogos (todas competições)` : posHome._fallback ? 'stats da temporada (sem posição numérica)' : 'classificação oficial',
+                em_casa: posHome.home ? {
                   jogos: posHome.home?.played,
                   vitorias: posHome.home?.win,
                   empates: posHome.home?.draw,
                   derrotas: posHome.home?.lose,
                   gols_pro: posHome.home?.goals?.for,
                   gols_contra: posHome.home?.goals?.against,
-                },
+                } : null,
               } : null,
               fora: posAway ? {
                 posicao: posAway.rank,
@@ -537,14 +725,15 @@ REGRAS:
                 saldo: (posAway.all?.goals?.for ?? 0) - (posAway.all?.goals?.against ?? 0),
                 forma: posAway.form,
                 status: posAway.description ?? null,
-                fora_de_casa: {
+                fonte: posAway._fromForma ? `últimos ${posAway._fromForma} jogos (todas competições)` : posAway._fallback ? 'stats da temporada (sem posição numérica)' : 'classificação oficial',
+                fora_de_casa: posAway.away ? {
                   jogos: posAway.away?.played,
                   vitorias: posAway.away?.win,
                   empates: posAway.away?.draw,
                   derrotas: posAway.away?.lose,
                   gols_pro: posAway.away?.goals?.for,
                   gols_contra: posAway.away?.goals?.against,
-                },
+                } : null,
               } : null,
             },
 
@@ -649,9 +838,19 @@ REGRAS:
     })
   )
 
+  // Se NENHUM jogo foi encontrado na API, retorna erro claro
+  const allFailed = legsWithData.every((item: any) => !item.data)
+  if (allFailed) {
+    const jogos = ticketData.legs.map(l => `${l.home_team} x ${l.away_team}`).join(', ')
+    console.error('[avaliar] Nenhum jogo encontrado:', jogos)
+    return NextResponse.json({
+      error: `Nenhum dos jogos foi encontrado na API de futebol. Verifique se os nomes dos times e a data (${ticketData.legs[0].match_date}) estão corretos. Jogos: ${jogos}`,
+    }, { status: 400 })
+  }
+
   // ── PASSO 3: Montar texto completo para o Claude ──
   const jogosTexto = legsWithData.map((item, i) => {
-    const { leg, fixture, data, analise_valor } = item as any
+    const { leg, fixture, data, analise_valor, noticias } = item as any
     if (!data) return `JOGO ${i + 1}: ${leg.home_team} vs ${leg.away_team}\nSELEÇÃO: ${leg.selection} @ ${leg.odd}x\n⚠️ Jogo não localizado na API.\n`
 
     const p = data.previsao
@@ -675,7 +874,7 @@ SELEÇÃO: ${leg.selection} @ odd ${leg.odd}x
 ════════════════════════════════════════════════════════
 
 ▌ ANÁLISE DE VALOR
-  Probabilidade real (API Poisson): ${av.prob_real_api}
+  Probabilidade real: ${av.prob_real_api} (fonte: ${av.prob_fonte})
   Probabilidade implícita na odd ${leg.odd}x: ${av.prob_implicita_odd}
   Edge (diferença): ${av.edge} → ${av.tem_valor === true ? '✅ HÁ VALOR' : av.tem_valor === false ? '❌ SEM VALOR' : 'dados insuficientes'}
 
@@ -692,10 +891,10 @@ ${p ? `  Favorito: ${p.favorito}
   H2H histórico (API): Casa ${p.h2h_historico_api_casa} | Fora ${p.h2h_historico_api_fora}` : '  Previsão não disponível para este jogo.'}
 
 ▌ TABELA — ${fixture.liga}
-${sh ? `  ${fixture.home}: ${sh.posicao}º lugar | ${sh.pontos}pts | ${sh.jogos}J ${sh.vitorias}V ${sh.empates}E ${sh.derrotas}D | Saldo ${sh.saldo > 0 ? '+' : ''}${sh.saldo} | Forma: ${sh.forma ?? 'N/D'} | ${sh.status ?? ''}
-  Em casa: ${sh.em_casa.jogos}J ${sh.em_casa.vitorias}V ${sh.em_casa.empates}E ${sh.em_casa.derrotas}D | ${sh.em_casa.gols_pro} gols marcados / ${sh.em_casa.gols_contra} sofridos` : `  ${fixture.home}: não disponível`}
-${sa ? `  ${fixture.away}: ${sa.posicao}º lugar | ${sa.pontos}pts | ${sa.jogos}J ${sa.vitorias}V ${sa.empates}E ${sa.derrotas}D | Saldo ${sa.saldo > 0 ? '+' : ''}${sa.saldo} | Forma: ${sa.forma ?? 'N/D'} | ${sa.status ?? ''}
-  Fora de casa: ${sa.fora_de_casa.jogos}J ${sa.fora_de_casa.vitorias}V ${sa.fora_de_casa.empates}E ${sa.fora_de_casa.derrotas}D | ${sa.fora_de_casa.gols_pro} gols marcados / ${sa.fora_de_casa.gols_contra} sofridos` : `  ${fixture.away}: não disponível`}
+${sh ? `  ${fixture.home}: ${sh.posicao ? sh.posicao + 'º lugar | ' : ''}${sh.pontos}pts | ${sh.jogos}J ${sh.vitorias}V ${sh.empates}E ${sh.derrotas}D | Saldo ${sh.saldo > 0 ? '+' : ''}${sh.saldo} | Forma: ${sh.forma ?? 'N/D'}${sh.status ? ' | ' + sh.status : ''} [fonte: ${sh.fonte}]
+${sh.em_casa ? `  Em casa: ${sh.em_casa.jogos}J ${sh.em_casa.vitorias}V ${sh.em_casa.empates}E ${sh.em_casa.derrotas}D | ${sh.em_casa.gols_pro} gols marcados / ${sh.em_casa.gols_contra} sofridos` : ''}` : `  ${fixture.home}: não disponível`}
+${sa ? `  ${fixture.away}: ${sa.posicao ? sa.posicao + 'º lugar | ' : ''}${sa.pontos}pts | ${sa.jogos}J ${sa.vitorias}V ${sa.empates}E ${sa.derrotas}D | Saldo ${sa.saldo > 0 ? '+' : ''}${sa.saldo} | Forma: ${sa.forma ?? 'N/D'}${sa.status ? ' | ' + sa.status : ''} [fonte: ${sa.fonte}]
+${sa.fora_de_casa ? `  Fora de casa: ${sa.fora_de_casa.jogos}J ${sa.fora_de_casa.vitorias}V ${sa.fora_de_casa.empates}E ${sa.fora_de_casa.derrotas}D | ${sa.fora_de_casa.gols_pro} gols marcados / ${sa.fora_de_casa.gols_contra} sofridos` : ''}` : `  ${fixture.away}: não disponível`}
 
 ▌ ESTATÍSTICAS DA TEMPORADA
 ${data.stats_temporada.casa ?? `  ${fixture.home}: não disponível`}
@@ -752,6 +951,8 @@ ${escA ? `  ${fixture.away} (${escA.formacao}) | Técnico: ${escA.tecnico ?? 'N/
 ▌ DESFALQUES E LESÕES
 ${data.lesoes.length > 0 ? data.lesoes.map((l: string) => `  ⛔ ${l}`).join('\n') : '  Nenhum desfalque registrado'}
 
+${noticias ? `▌ NOTÍCIAS RECENTES (web, últimas 48h)\n${noticias}` : ''}
+
 ${data.stats_jogo ? `▌ ESTATÍSTICAS DO JOGO (já encerrado)
   Chutes a gol: ${fixture.home} ${data.stats_jogo.chutes_gol.casa} | ${fixture.away} ${data.stats_jogo.chutes_gol.fora}
   Chutes totais: ${fixture.home} ${data.stats_jogo.chutes_total.casa} | ${fixture.away} ${data.stats_jogo.chutes_total.fora}
@@ -767,54 +968,80 @@ ${data.stats_jogo ? `▌ ESTATÍSTICAS DO JOGO (já encerrado)
 
 REGRAS ABSOLUTAS:
 1. Use APENAS dados dos blocos abaixo — NUNCA invente estatísticas
-2. "DADOS INSUFICIENTES" somente se previsão, tabela, forma E médias estiverem TODOS indisponíveis
+2. "DADOS INSUFICIENTES" somente se previsão, tabela, forma, estatísticas da temporada E H2H estiverem TODOS indisponíveis
 3. Para escanteios: use bloco "ESCANTEIOS — MÉDIAS REAIS". Para cartões: use bloco "CARTÕES — MÉDIAS REAIS"
-4. Se dados de escanteios/cartões forem indisponíveis, diga isso claramente no ponto correspondente
+4. Se escanteios/cartões indisponíveis, diga isso no ponto correspondente
 
-FORMATO DOS PONTOS (campo "pontos") — OBRIGATÓRIO, nunca deixe vazio:
-- Gere SEMPRE 5 bullets, cada um começando com emoji
-- LINGUAGEM SIMPLES: escreva como se estivesse explicando para alguém que aposta por hobby, não para um analista profissional
-- PROIBIDO usar: edge, pp, H2H, Poisson, WDLLL, LLDDD, implícita, probabilidade implícita, xG, API
-- Em vez disso use: "chance real", "confrontos anteriores", "sequência de resultados", "gols esperados", "forma recente"
-- Exemplos de bullets CORRETOS:
-  "📊 A chance real de vitória é 45%, mas a odd de 2.00 pagaria como se fosse 50% — a aposta não compensa"
-  "📋 Time na 16ª posição com aproveitamento ruim na temporada (20% dos pontos possíveis)"
-  "📉 Nos últimos 5 jogos fora de casa: 2 vitórias, 4 empates e 8 derrotas — time em má fase"
-  "🔁 Confrontos anteriores: 3 vitórias, 2 empates — mas o último jogo terminou 0x0"
-  "🤕 7 jogadores importantes fora por lesão: Arnold, Dardai, Fischer e mais 4"
-- "veredicto": 1 frase simples ex: "Não vale a pena apostar" ou "Boa oportunidade" ou "Aposta arriscada"
-- "alerta": 1 frase curta sobre o maior risco, em linguagem simples — ou null
+⚠️ REGRA CRÍTICA SOBRE DADOS ALTERNATIVOS — ZERO INVENÇÃO PERMITIDA:
+- Se um bullet usar dado alternativo, você DEVE citar o número EXATO que aparece no bloco de dados.
+- Se um número específico não estiver no bloco, é PROIBIDO chutar uma porcentagem ou estatística. Use texto descritivo neutro.
+- Fallbacks permitidos (sempre citando o número visto):
+  * TABELA indisponível + ESTATÍSTICAS DA TEMPORADA disponível → cite aproveitamento, vitórias/empates/derrotas, gols marcados/sofridos vistos no bloco
+  * TABELA indisponível + ESTATÍSTICAS indisponível → diga apenas "posição na tabela e aproveitamento não constam na base de dados — recomendo verificar antes de apostar"
+  * FORMA RECENTE indisponível + ESTATÍSTICAS TEMPORADA disponível → cite média gols/jogo, clean sheets vistos no bloco
+  * FORMA RECENTE indisponível + ESTATÍSTICAS indisponível → cite campo "Forma atual" da API se houver (string tipo WWLDW), ou diga "sequência de resultados recentes não disponível"
+  * H2H vazio (total = 0) → diga "sem histórico de confrontos diretos na base"
+  * H2H disponível → cite o número exato de jogos, vitórias/empates/derrotas
+  * LESÕES vazias + ESCALAÇÃO confirmada → cite formação e técnico vistos
+  * LESÕES vazias + ESCALAÇÃO não confirmada → "escalações ainda não confirmadas, sem desfalques registrados"
+- ESTA REGRA SOBREPÕE TUDO: prefira "não há esse dado disponível" honesto a inventar um número.
+
+SUGESTÕES ALTERNATIVAS (campo "alternativas") — APENAS QUANDO avaliacao = DESFAVORÁVEL ou NEUTRO:
+- Sugira de 1 a 3 mercados alternativos que tenham MAIS chance de acerto, baseados nos dados reais
+- USE APENAS as odds do bloco "ODDS DE MERCADO" — NUNCA invente odds
+- Regras OBRIGATÓRIAS (NÃO sugerir se a regra não for satisfeita):
+  * "Dupla chance 1X" (casa ou empate): só se odd média 1X disponível E (Tabela do time casa: aproveitamento ≥45% OU forma últimos 5 da casa ≥2V)
+  * "Dupla chance X2" (empate ou fora): só se odd média X2 disponível E (Tabela do time fora: aproveitamento ≥45% OU forma últimos 5 do fora ≥2V)
+  * "Over X.5 escanteios" totais: só se (média_pro_casa + média_pro_fora dos últimos 5 jogos) ≥ X + 2.0
+  * "Ambas marcam — Sim": só se BTTS% nas últimas 10 partidas de AMBOS os times ≥60% E média gols H2H ≥ 2.0
+  * "Over 1.5 gols": só se gols esperados Poisson (casa+fora) ≥ 2.8
+  * "Over 2.5 gols": só se gols esperados Poisson (casa+fora) ≥ 3.2
+- Cada alternativa deve ter raciocínio com NÚMEROS específicos dos dados ("forma 4V1E", "média 6.2 escanteios/jogo cada time", etc.)
+- Se NENHUMA regra for satisfeita, retorne "alternativas": []
+- Se avaliacao = FAVORÁVEL, retorne "alternativas": []
+
+FORMATO DOS PONTOS (campo "pontos") — OBRIGATÓRIO, sempre 5 bullets com emoji:
+- LINGUAGEM SIMPLES: explique para um apostador de hobby, não para analista profissional
+- PROIBIDO usar termos técnicos: edge, pp, H2H, Poisson, implícita, xG, API
+- Substitua por linguagem natural: "chance real", "confrontos anteriores", "gols esperados", "forma recente", "média de gols"
+- Os 5 bullets devem cobrir: (1) chance vs odd, (2) tabela/posição, (3) forma recente, (4) confrontos anteriores, (5) escalação/lesões
+- "veredicto": 1 frase clara ex: "Não vale a pena apostar" | "Boa oportunidade" | "Aposta arriscada"
+- "alerta": 1 frase sobre o maior risco em linguagem simples — ou null se não houver
 
 CONTEXTO DO APOSTADOR:
 Banca: R$ ${bankroll.toFixed(2)}
 Odd total do bilhete: ${ticketData.total_odd ?? 'não identificada'}
 Stake apostado: ${ticketData.stake ? `R$ ${ticketData.stake}` : 'não identificado'}
-Retorno potencial: ${ticketData.total_odd && ticketData.stake ? `R$ ${(ticketData.total_odd * ticketData.stake).toFixed(2)}` : 'não calculável'}
+Retorno potencial: ${ticketData.retorno_real
+  ? `R$ ${ticketData.retorno_real.toFixed(2)} (valor exato do bilhete, inclui boosts/aumentos da casa)`
+  : (ticketData.total_odd && ticketData.stake ? `R$ ${(ticketData.total_odd * ticketData.stake).toFixed(2)} (calculado: odd × stake, sem considerar possíveis boosts)` : 'não calculável')}
+⚠️ Use SEMPRE o valor exato de "Retorno potencial" acima nos seus textos. NÃO recalcule odd × stake — esse cálculo ignora boosts/aumentos da casa de aposta.
 
 ${jogosTexto}
 
-Retorne APENAS este JSON (sem nenhum texto fora do JSON):
+Retorne APENAS este JSON (sem nenhum texto fora do JSON, sem markdown, sem code fences):
 {
   "legs": [
     {
       "jogo": "Time A vs Time B",
       "selecao": "seleção exata do apostador",
       "odd": 2.00,
-      "avaliacao": "FAVORÁVEL | NEUTRO | DESFAVORÁVEL | DADOS INSUFICIENTES",
-      "confianca": "alta | média | baixa | sem dados",
-      "prob_real": "X% (da API)",
-      "prob_implicita_odd": "X% (da odd do apostador)",
-      "edge": "+Xpp (há valor) OU -Xpp (sem valor)",
+      "avaliacao": "FAVORÁVEL",
+      "confianca": "alta",
+      "prob_real": "55%",
+      "prob_implicita_odd": "50%",
+      "edge": "+5pp",
       "pontos": [
-        "📊 Probabilidade real: 45% vs implícita da odd: 50% → edge -5pp (sem valor)",
-        "📋 Tabela: 16º lugar, 29pts, aproveitamento 20%, ameaçado de rebaixamento",
-        "📉 Forma: 2V 4E 8D fora de casa na temporada, sofrendo 2.2 gols/jogo",
-        "🔁 H2H: 3 vitórias, 2 empates, 0 derrotas — mas último jogo terminou 0x0",
-        "🤕 Desfalques: Arnold, Dardai, Fischer, Rogerio, Seelt, Wimmer, Wind (7 fora)"
+        "📊 A chance real de vitória é 55%, e a odd 2.00 paga como se fosse 50% — vale a aposta",
+        "📋 Time líder da tabela com 70% de aproveitamento na temporada",
+        "📈 Últimos 5 jogos em casa: 4 vitórias e 1 empate, marcando 2.4 gols por jogo",
+        "🔁 Confrontos anteriores: venceu 4 dos últimos 5, com média 2.8 gols por jogo",
+        "🤕 Sem desfalques importantes registrados"
       ],
-      "veredicto": "Não apostar — odd sem valor e time em má fase",
-      "alerta": "alerta crítico em 1 frase curta — ou null",
-      "valor_detectado": false
+      "veredicto": "Boa oportunidade — dados favorecem fortemente esta aposta",
+      "alerta": null,
+      "valor_detectado": true,
+      "alternativas": []
     }
   ],
   "resumo": {
@@ -822,42 +1049,90 @@ Retorne APENAS este JSON (sem nenhum texto fora do JSON):
     "jogos_neutros": 0,
     "jogos_desfavoraveis": 0,
     "jogos_sem_dados": 0,
-    "probabilidade_combinada": "X% (produto das probabilidades reais de cada perna — calcule apenas se TODAS tiverem prob_real disponível)",
-    "probabilidade_implicita_bilhete": "X% (1 / odd_total)",
+    "probabilidade_combinada": "X%",
+    "probabilidade_implicita_bilhete": "X%",
     "odd_total": 4.00,
     "tem_valor": true,
     "nota_geral": "7/10",
-    "parecer": "1 frase simples e direta para o apostador, sem jargão. Ex: 'Bilhete arriscado — os dois times têm baixa chance de ganhar segundo os dados.' ou 'Boas seleções — os dados favorecem as duas apostas.'"
+    "parecer": "1 frase simples e direta para o apostador, sem jargão"
   },
   "gestao_banca": {
     "stake_sugerido": 25.00,
     "percentual_banca": "5%",
-    "raciocinio": "1 frase simples. Ex: 'Os dados não favorecem este bilhete — se for apostar mesmo assim, não coloque mais que R$X.' ou 'As seleções têm bom respaldo — apostar até R$X é razoável.'"
+    "raciocinio": "1 frase simples sobre quanto apostar"
   },
-  "alertas_gerais": ["máximo 3 alertas em linguagem simples. Ex: 'O time visitante chega com 7 jogadores lesionados para este jogo decisivo.' ou 'Nos confrontos anteriores, o time que você apostou nunca venceu.' — sem jargão técnico"]
-}`
+  "alertas_gerais": ["máximo 3 alertas em linguagem simples, sem jargão técnico"]
+}
 
+REGRAS DE JSON: aspas duplas em strings, vírgulas entre campos, nada de comentários, nada de texto fora do JSON, nada de markdown.`
+
+  // Timeout duro de 45s para o Claude responder — deixa margem dos 60s da Vercel
+  const analysisController = new AbortController()
+  const analysisTimeout = setTimeout(() => analysisController.abort(), 45000)
+  let response: any
   try {
-    const response = await anthropic.messages.create({
+    response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
+      max_tokens: 6144,
       messages: [{ role: 'user', content: prompt }],
-    })
-
-    const text = response.content[0].type === 'text' ? response.content[0].text : ''
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) throw new Error('Sem JSON na resposta')
-
-    const analysis = JSON.parse(jsonMatch[0])
-
-    if (!isPro) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any).from('profiles').update({ avaliacoes_gratuitas: avaliacoesUsadas + 1 }).eq('id', user.id)
-    }
-
-    return NextResponse.json({ success: true, ticket: ticketData, analysis })
-  } catch (err) {
-    console.error('[bilhete/avaliar]', err instanceof Error ? err.message : String(err))
-    return NextResponse.json({ error: 'Erro ao analisar bilhete. Tente novamente.' }, { status: 500 })
+    }, { signal: analysisController.signal })
+    clearTimeout(analysisTimeout)
+  } catch (err: any) {
+    clearTimeout(analysisTimeout)
+    const msg = err?.name === 'AbortError'
+      ? 'A análise demorou demais. Tente um bilhete com menos seleções.'
+      : `Falha na análise: ${err?.message ?? 'erro Claude'}`
+    console.error('[bilhete/avaliar] Claude API falhou:', err?.message ?? err)
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
+
+  const text = response.content?.[0]?.type === 'text' ? response.content[0].text : ''
+  if (!text) {
+    console.error('[bilhete/avaliar] Claude não retornou texto')
+    return NextResponse.json({ error: 'Análise vazia. Tente novamente.' }, { status: 500 })
+  }
+
+  const jsonMatch = text.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) {
+    console.error('[bilhete/avaliar] Sem JSON na resposta:', text.substring(0, 500))
+    return NextResponse.json({ error: 'Resposta da IA inválida. Tente novamente.' }, { status: 500 })
+  }
+
+  let analysis: any
+  try {
+    analysis = JSON.parse(jsonMatch[0])
+  } catch (parseErr: any) {
+    console.error('[bilhete/avaliar] JSON inválido:', parseErr?.message, 'TEXTO:', jsonMatch[0].substring(0, 800))
+    return NextResponse.json({ error: 'Análise corrompida. Tente novamente.' }, { status: 500 })
+  }
+
+  if (!analysis?.legs || !Array.isArray(analysis.legs)) {
+    console.error('[bilhete/avaliar] Análise sem campo legs:', analysis)
+    return NextResponse.json({ error: 'Análise incompleta. Tente novamente.' }, { status: 500 })
+  }
+
+  if (!isPro) {
+    const { error: updateErr } = await (supabaseAdmin as any).from('profiles')
+      .update({ avaliacoes_gratuitas: avaliacoesUsadas + 1 })
+      .eq('id', user.id)
+    if (updateErr) console.error('[avaliar] erro ao registrar avaliação gratuita:', updateErr)
+  }
+
+  // Salva no histórico (best-effort, nunca falha o request)
+  try {
+    const jogosResumo = ticketData.legs.map((l: any) => `${l.home_team} x ${l.away_team}`).join(' · ')
+    await (supabaseAdmin as any).from('avaliacoes').insert({
+      user_id: user.id,
+      bilhete: ticketData,
+      analysis,
+      jogos_resumo: jogosResumo,
+      nota_geral: analysis.resumo?.nota_geral ?? null,
+      tem_valor: analysis.resumo?.tem_valor ?? null,
+      total_odd: ticketData.total_odd ?? null,
+    })
+  } catch (e: any) {
+    console.warn('[avaliar] histórico falhou (não afeta análise):', e?.message ?? e)
+  }
+
+  return NextResponse.json({ success: true, ticket: ticketData, analysis })
 }
